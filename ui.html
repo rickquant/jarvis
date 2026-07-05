@@ -214,6 +214,7 @@
     <div class="dato"><div class="k">latencia</div><div class="v" id="tLat">—</div></div>
     <button id="modo" title="alternar entre modo HUD (subtítulos) y modo consola (chat completo)">modo · hud</button>
     <button id="voz" title="manos libres: decí «hey jarvis» y hablá — sin clicks">voz · click</button>
+    <button id="idioma" title="español / english">es</button>
   </div>
 </header>
 
@@ -230,7 +231,7 @@
 
   <div id="ladoChat">
     <div id="chat">
-      <div class="msg sys">— sistemas en línea —</div>
+      <div class="msg sys" id="sysOnline">— sistemas en línea —</div>
     </div>
     <div id="barra">
       <input id="entrada" placeholder="escribile a jarvis…" autocomplete="off">
@@ -243,8 +244,72 @@
 <script>
 const $ = s => document.querySelector(s);
 const chat = $("#chat");
-const FASES = { listo: "en línea", escuchando: "escuchando…", transcribiendo: "transcribiendo…",
-                pensando: "procesando…", hablando: "hablando" };
+// ── Idioma de la UI (es/en): todos los textos visibles salen de acá ──────
+// Traduce la página, no al cerebro: Jarvis responde en el idioma en que le
+// hablen (la voz Andrew es multilingüe). Los avisos generados por el server
+// (timers, despedida) siguen en español — pendiente si molesta en demos.
+const L = {
+  es: {
+    fases: { listo: "en línea", escuchando: "escuchando…", transcribiendo: "transcribiendo…",
+             pensando: "procesando…", hablando: "hablando" },
+    manos: { Bash: "ejecutando acción…", Read: "leyendo el vault…",
+             Grep: "buscando en el vault…", Glob: "buscando en el vault…" },
+    boot: [["NÚCLEO", "EN LÍNEA"], ["MEMORIA", "VAULT MONTADO"], ["CEREBRO", "SONNET · SUSCRIPCIÓN"],
+           ["OÍDOS", "WHISPER LOCAL"], ["VOZ", "ANDREW · EDGE-TTS"]],
+    iniciar: "iniciar", tele: ["hora", "sesión", "turnos", "latencia"],
+    modo: m => "modo · " + m,
+    modoTitle: "alternar entre modo HUD (subtítulos) y modo consola (chat completo)",
+    voz: libre => "voz · " + (libre ? "hey jarvis" : "click"),
+    vozTitle: "manos libres: decí «hey jarvis» y hablá — sin clicks",
+    reactorTitle: "click: hablar / cortar / interrumpir",
+    pistaClick: "click en el reactor para hablar · click de nuevo para cortar",
+    pistaLibre: "decí «hey jarvis» y hablá — click en el reactor solo para interrumpir",
+    placeholder: "escribile a jarvis…", enviar: "enviar", guardar: "guardar",
+    guardarTitle: "guardar memoria al vault y cerrar sesión",
+    sysOnline: "— sistemas en línea —",
+    memGuardada: "memoria guardada → ", sesVacia: "sesión vacía, nada que guardar",
+    noRespondio: "no respondió", manosLibresErr: "⚠ manos libres: ",
+    saludo: h => h < 12 ? "Buenos días" : h < 19 ? "Buenas tardes" : "Buenas noches",
+    corto: s => `${s}, Charles. Sistemas en línea.`,
+    intro: s => [`${s}, Charles.`,
+      "Permitime presentarme: soy Jarvis, una inteligencia artificial " +
+      "virtual, y estoy acá para asistirte con una variedad de tareas " +
+      "lo mejor que pueda, las 24 horas del día, los 7 días de la semana.",
+      "Importando tus preferencias desde el vault. Los sistemas están " +
+      "ahora completamente operativos."],
+  },
+  en: {
+    fases: { listo: "online", escuchando: "listening…", transcribiendo: "transcribing…",
+             pensando: "processing…", hablando: "speaking" },
+    manos: { Bash: "running an action…", Read: "reading the vault…",
+             Grep: "searching the vault…", Glob: "searching the vault…" },
+    boot: [["CORE", "ONLINE"], ["MEMORY", "VAULT MOUNTED"], ["BRAIN", "SONNET · SUBSCRIPTION"],
+           ["EARS", "LOCAL WHISPER"], ["VOICE", "ANDREW · EDGE-TTS"]],
+    iniciar: "start", tele: ["time", "session", "turns", "latency"],
+    modo: m => "mode · " + (m === "consola" ? "console" : m),
+    modoTitle: "toggle between HUD mode (subtitles) and console mode (full chat)",
+    voz: libre => "voice · " + (libre ? "hey jarvis" : "click"),
+    vozTitle: "hands-free: say «hey jarvis» and talk — no clicks",
+    reactorTitle: "click: talk / stop / interrupt",
+    pistaClick: "click the reactor to talk · click again to stop",
+    pistaLibre: "say «hey jarvis» and talk — click the reactor only to interrupt",
+    placeholder: "type to jarvis…", enviar: "send", guardar: "save",
+    guardarTitle: "save memory to the vault and end the session",
+    sysOnline: "— systems online —",
+    memGuardada: "memory saved → ", sesVacia: "empty session, nothing to save",
+    noRespondio: "didn't respond", manosLibresErr: "⚠ hands-free: ",
+    saludo: h => h < 12 ? "Good morning" : h < 19 ? "Good afternoon" : "Good evening",
+    corto: s => `${s}, Charles. Systems online.`,
+    intro: s => [`${s}, Charles.`,
+      "Allow me to introduce myself: I am Jarvis, a virtual artificial " +
+      "intelligence, and I am here to assist you with a variety of tasks " +
+      "as best I can, 24 hours a day, 7 days a week.",
+      "Importing your preferences from the vault. All systems are now " +
+      "fully operational."],
+  },
+};
+let idioma = localStorage.getItem("jarvis-idioma") || "es";
+const T = () => L[idioma];
 const COLORES = {
   listo:          { main: "#4fd8eb", dim: "rgba(79,216,235," },
   escuchando:     { main: "#ebb54f", dim: "rgba(235,181,79," },
@@ -254,9 +319,7 @@ const COLORES = {
 };
 
 let grabando = false, ocupado = false, faseServidor = "listo";
-let manoActiva = null;  // nombre legible de la mano en ejecución (o null)
-const MANOS_NOMBRES = { Bash: "ejecutando acción…", Read: "leyendo el vault…",
-                        Grep: "buscando en el vault…", Glob: "buscando en el vault…" };
+let manoActiva = null;  // clave de la mano en ejecución (Bash/Read/Grep/Glob) o null
 let turnos = 0, inicio = Date.now();
 let nivelMic = 0, nivelSuave = 0;   // RMS del mic (servidor) → pulso del reactor
 const latencias = [];               // últimos turnos, para el panel de telemetría
@@ -364,12 +427,41 @@ setInterval(() => {
 // ── Modo HUD ↔ consola ───────────────────────────────────────────────────
 function ponerModo(m) {
   document.body.classList.toggle("hud", m === "hud");
-  $("#modo").textContent = "modo · " + m;
+  $("#modo").textContent = T().modo(m);
   localStorage.setItem("jarvis-modo", m);
 }
 $("#modo").onclick = () =>
   ponerModo(document.body.classList.contains("hud") ? "consola" : "hud");
 ponerModo(localStorage.getItem("jarvis-modo") || "hud");
+
+// ── Idioma es/en: reescribe todo lo estático; lo dinámico ya lee de T() ──
+function aplicarIdioma() {
+  const t = T();
+  document.querySelectorAll("#boot .linea").forEach((el, i) => {
+    const [k, v] = t.boot[i];
+    el.innerHTML = `&gt; ${k} ${".".repeat(Math.max(3, 18 - k.length))} <b>${v}</b>`;
+  });
+  $("#iniciar").textContent = t.iniciar;
+  document.querySelectorAll("#telemetria .k").forEach((el, i) => el.textContent = t.tele[i]);
+  $("#modo").title = t.modoTitle;
+  $("#modo").textContent = t.modo(document.body.classList.contains("hud") ? "hud" : "consola");
+  $("#voz").title = t.vozTitle;
+  $("#voz").textContent = t.voz(manosLibres);
+  $("#reactor").title = t.reactorTitle;
+  $("#pista").textContent = manosLibres ? t.pistaLibre : t.pistaClick;
+  $("#entrada").placeholder = t.placeholder;
+  $("#enviar").textContent = t.enviar;
+  $("#cerrar").textContent = t.guardar;
+  $("#cerrar").title = t.guardarTitle;
+  $("#sysOnline").textContent = t.sysOnline;
+  $("#idioma").textContent = idioma;
+}
+$("#idioma").onclick = () => {
+  idioma = idioma === "es" ? "en" : "es";
+  localStorage.setItem("jarvis-idioma", idioma);
+  aplicarIdioma();
+};
+// (la llamada inicial vive al final del script: necesita manosLibres declarado)
 
 // ── Chat ─────────────────────────────────────────────────────────────────
 function msg(quien, texto) {
@@ -471,9 +563,9 @@ async function turno(texto) {
           }
         }
         else if (ev.tipo === "mano") {
-          manoActiva = MANOS_NOMBRES[ev.texto] || "ejecutando acción…";
-          $("#fase").textContent = manoActiva;
-          msg("sys", "⚙ " + manoActiva);
+          manoActiva = ev.texto;  // se guarda la CLAVE: el texto sale de T()
+          $("#fase").textContent = T().manos[manoActiva] || T().manos.Bash;
+          msg("sys", "⚙ " + (T().manos[manoActiva] || T().manos.Bash));
         }
         else if (ev.tipo === "oracion") decir(ev.texto);
         else if (ev.tipo === "fin") {
@@ -506,7 +598,7 @@ $("#reactor").onclick = async () => {
       if (r.error) { msg("sys", "⚠ mic: " + r.error); return; }  // nunca en silencio
       grabando = true;
       bip(880, 0.06); setTimeout(() => bip(1245, 0.08), 70);     // "te escucho"
-    } catch (e) { msg("sys", "⚠ mic: " + (e.message || "no respondió")); }
+    } catch (e) { msg("sys", "⚠ mic: " + (e.message || T().noRespondio)); }
   } else {
     bip(660, 0.08);                                               // "recibido"
     grabando = false; ocupado = true;
@@ -517,7 +609,7 @@ $("#reactor").onclick = async () => {
       if (r.error) msg("sys", "⚠ " + r.error);
       else await turno(r.texto);
     } catch (e) {
-      msg("sys", "⚠ mic: " + (e.message || "no respondió"));
+      msg("sys", "⚠ mic: " + (e.message || T().noRespondio));
     } finally { ocupado = false; }
   }
 };
@@ -538,8 +630,8 @@ $("#cerrar").onclick = async () => {
   ocupado = true;
   try {
     const r = await api("salir", {});
-    if (r.nota) { msg("sys", "memoria guardada → " + r.nota); decir(r.despedida); }
-    else msg("sys", r.error ? "⚠ " + r.error : "sesión vacía, nada que guardar");
+    if (r.nota) { msg("sys", T().memGuardada + r.nota); decir(r.despedida); }
+    else msg("sys", r.error ? "⚠ " + r.error : T().sesVacia);
   } finally { ocupado = false; }
 };
 
@@ -551,7 +643,7 @@ setInterval(async () => {
     // mientras la voz suena — si un "off" se pierde, el oído se recupera solo
     const e = await api("estado" + (sonando ? "?hablando=1" : ""));
     nivelMic = e.nivel || 0;
-    if (e.manos_error) msg("sys", "⚠ manos libres: " + e.manos_error);
+    if (e.manos_error) msg("sys", T().manosLibresErr + e.manos_error);
 
     // aviso de timer vencido: bip de atención + jarvis lo dice por voz
     if (e.aviso) {
@@ -600,11 +692,9 @@ async function ponerVoz(libre) {
     const r = await api("manos_libres", { on: libre });
     manosLibres = r.on;
   } catch { manosLibres = false; }
-  $("#voz").textContent = "voz · " + (manosLibres ? "hey jarvis" : "click");
+  $("#voz").textContent = T().voz(manosLibres);
   $("#voz").classList.toggle("libre", manosLibres);
-  $("#pista").textContent = manosLibres
-    ? "decí «hey jarvis» y hablá — click en el reactor solo para interrumpir"
-    : "click en el reactor para hablar · click de nuevo para cortar";
+  $("#pista").textContent = manosLibres ? T().pistaLibre : T().pistaClick;
   localStorage.setItem("jarvis-voz", manosLibres ? "libre" : "click");
 }
 $("#voz").onclick = () => ponerVoz(!manosLibres);
@@ -620,7 +710,8 @@ setInterval(() => {
   const s = Math.floor((Date.now() - inicio) / 1000);
   $("#tSesion").textContent =
     String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
-  $("#fase").textContent = manoActiva || FASES[faseActual()] || faseActual();
+  $("#fase").textContent = (manoActiva && (T().manos[manoActiva] || T().manos.Bash))
+                           || T().fases[faseActual()] || faseActual();
 }, 1000);
 
 // ── Reactor (canvas) ─────────────────────────────────────────────────────
@@ -709,7 +800,7 @@ function dibujarReactor(t) {
   }
 
   // texto circular girando: la fase actual, estilo Iron Man
-  const rotulo = ("  J.A.R.V.I.S  ·  " + (FASES[fase] || fase) + "  ·").toUpperCase();
+  const rotulo = ("  J.A.R.V.I.S  ·  " + (T().fases[fase] || fase) + "  ·").toUpperCase();
   ctx.font = "9px 'Share Tech Mono', monospace";
   ctx.fillStyle = c.dim + ".55)";
   for (let i = 0; i < rotulo.length; i++) {
@@ -872,21 +963,15 @@ let frameAnterior = 0;
 $("#iniciar").onclick = () => {
   prepararAudio();
   $("#boot").classList.add("fuera");
-  const h = new Date().getHours();
-  const saludo = h < 12 ? "Buenos días" : h < 19 ? "Buenas tardes" : "Buenas noches";
+  const saludo = T().saludo(new Date().getHours());
   // intro estilo película (Iron Man 3 Second Screen) solo en el primer boot
   // del día; los demás boots usan el saludo corto para no cansar
   const hoy = new Date().toDateString();
   if (localStorage.getItem("jarvis-intro") !== hoy) {
     localStorage.setItem("jarvis-intro", hoy);
-    decir(`${saludo}, Charles.`);
-    decir("Permitime presentarme: soy Jarvis, una inteligencia artificial " +
-          "virtual, y estoy acá para asistirte con una variedad de tareas " +
-          "lo mejor que pueda, las 24 horas del día, los 7 días de la semana.");
-    decir("Importando tus preferencias desde el vault. Los sistemas están " +
-          "ahora completamente operativos.");
+    T().intro(saludo).forEach(decir);
   } else {
-    decir(`${saludo}, Charles. Sistemas en línea.`);
+    decir(T().corto(saludo));
   }
   $("#entrada").focus();
 };
@@ -894,6 +979,9 @@ $("#iniciar").onclick = () => {
 // modo dev: ?sin-boot salta la secuencia (queda sin audio: el click de
 // "iniciar" es lo que desbloquea el AudioContext del browser)
 if (location.search.includes("sin-boot")) $("#boot").classList.add("fuera");
+
+// idioma guardado: se aplica al final, cuando todo lo que toca ya existe
+aplicarIdioma();
 </script>
 </body>
 </html>
