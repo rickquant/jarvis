@@ -283,16 +283,17 @@ function decir(texto) {  // pide el mp3 ya (en paralelo) y lo encola en orden
       body: JSON.stringify({ texto }) })
     .then(r => r.ok && r.status !== 204 ? r.arrayBuffer() : null)
     .catch(() => null);
-  cola.push(p);
-  if (!sonando) reproducirCola();
+  cola.push({ p, texto });  // el texto viaja con su mp3: el subtítulo se
+  if (!sonando) reproducirCola();  // muestra recién cuando ESA oración suena
 }
 
 async function reproducirCola() {
   sonando = true;
   api("hablando", { on: true }).catch(() => {});   // anti-eco: pausa el oído
   while (cola.length) {
-    const datos = await cola.shift();
-    if (!datos || !datos.byteLength) continue;
+    const item = cola.shift();
+    const datos = await item.p;
+    if (!datos || !datos.byteLength) { subPoner(item.texto); continue; }
     try {
       const buf = await actx.decodeAudioData(datos);
       // recortar los colchones de silencio que edge-tts deja en las puntas
@@ -310,6 +311,7 @@ async function reproducirCola() {
         fuente.connect(analizador);
         fuente.onended = res;
         fuente.start(0, desde, dur);
+        subPoner(item.texto);  // subtítulo de película: la oración que suena
         if (alArrancarAudio) { alArrancarAudio(); alArrancarAudio = null; }
       });
     } catch {}
@@ -353,11 +355,6 @@ function subPoner(texto, dim = false) {
   subEl.classList.remove("apagado");
   subUltimo = Date.now();
 }
-function subSumar(texto) {
-  subEl.textContent += texto;
-  subEl.classList.remove("apagado");
-  subUltimo = Date.now();
-}
 // el subtítulo se apaga solo cuando la voz ya terminó y nada está en curso
 setInterval(() => {
   if (subEl.textContent && !sonando && !ocupado && Date.now() - subUltimo > 3500)
@@ -398,14 +395,14 @@ function msgStreaming() {  // burbuja de jarvis que se va llenando en vivo
   d.innerHTML = `<span class="quien">jarvis</span><span class="cuerpo"></span><span class="caret"></span>`;
   chat.appendChild(d);
   chat.scrollTop = chat.scrollHeight;
-  let subIniciado = false;  // el primer delta limpia el prelude del subtítulo
+  // ojo: acá NO se toca el subtítulo — los deltas llegan a velocidad de LLM
+  // y la voz va por oración; el subtítulo lo pone reproducirCola() cuando
+  // cada oración SUENA, para que texto y voz vayan parejos (reporte 2026-07-05)
   return {
     delta(t) {
       d.querySelector(".cuerpo").textContent += t; chat.scrollTop = chat.scrollHeight;
-      if (!subIniciado) { subPoner(""); subIniciado = true; }
-      subSumar(t);
     },
-    fin(t)   { d.querySelector(".cuerpo").textContent = t; d.querySelector(".caret").remove(); subPoner(t); },
+    fin(t)   { d.querySelector(".cuerpo").textContent = t; d.querySelector(".caret").remove(); },
     error(t) { d.remove(); msg("sys", "⚠ " + t); },
   };
 }
