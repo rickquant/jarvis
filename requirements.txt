@@ -1,0 +1,15 @@
+# Cerebro (solo jarvis.py, la versión SDK; jarvis_cli.py usa `claude -p` sin key)
+anthropic>=0.115
+
+# Voz
+mlx-whisper      # STT local (Apple Silicon)
+edge-tts         # TTS (gratis, necesita internet)
+sounddevice      # mic
+numpy
+
+# Manos libres (wake word)
+openwakeword
+onnxruntime
+
+# HUD web
+flask

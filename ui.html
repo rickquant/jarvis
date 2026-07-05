@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>J.A.R.V.I.S.</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600&family=Share+Tech+Mono&display=swap');
+
+  :root {
+    --cyan: #4fd8eb;
+    --cyan-hi: #b8f3fc;
+    --cyan-dim: #1a6b78;
+    --ambar: #ebb54f;
+    --bg: #05080d;
+    --panel: rgba(79, 216, 235, 0.045);
+    --border: rgba(79, 216, 235, 0.16);
+    --text: #c9e9ef;
+    --mono: "Share Tech Mono", "SF Mono", Menlo, monospace;
+    --sans: "Rajdhani", "Avenir Next", sans-serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background:
+      radial-gradient(ellipse at 50% 0%, rgba(79,216,235,.06) 0%, transparent 55%),
+      linear-gradient(rgba(79,216,235,.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(79,216,235,.025) 1px, transparent 1px),
+      var(--bg);
+    background-size: auto, 44px 44px, 44px 44px, auto;
+    color: var(--text);
+    font-family: var(--sans);
+    height: 100vh; overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  /* scanlines sutiles encima de todo */
+  body::after {
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 5;
+    background: repeating-linear-gradient(0deg, rgba(0,0,0,.12) 0 1px, transparent 1px 3px);
+    opacity: .35;
+  }
+  #particulas { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+
+  /* ── Header ── */
+  header {
+    position: relative; z-index: 2;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 26px 12px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, rgba(79,216,235,.05), transparent);
+  }
+  #titulo { font-family: var(--mono); }
+  #titulo b {
+    font-weight: 400; font-size: 19px; letter-spacing: 9px; color: var(--cyan);
+    text-shadow: 0 0 14px rgba(79,216,235,.6);
+  }
+  #titulo small { display: block; letter-spacing: 3.5px; font-size: 8.5px;
+    color: var(--cyan-dim); margin-top: 3px; text-transform: uppercase; }
+  #telemetria { display: flex; gap: 26px; }
+  .dato { text-align: right; min-width: 64px; }
+  .dato .k { font-size: 9px; letter-spacing: 2.5px; color: var(--cyan-dim);
+    text-transform: uppercase; }
+  .dato .v { font-family: var(--mono); font-size: 15px; color: var(--cyan);
+    text-shadow: 0 0 8px rgba(79,216,235,.35); }
+
+  /* ── Layout ── */
+  #main {
+    position: relative; z-index: 1; flex: 1; min-height: 0;
+    display: grid; grid-template-columns: 400px 1fr;
+  }
+  @media (max-width: 860px) { #main { grid-template-columns: 1fr; grid-template-rows: 300px 1fr; } }
+
+  /* ── Columna reactor ── */
+  #ladoReactor {
+    position: relative;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 6px; border-right: 1px solid var(--border); padding: 10px;
+  }
+  /* paneles FUI laterales — solo en modo HUD, decorativos pero con datos reales */
+  .panel { display: none; position: absolute; top: 50%; transform: translateY(-50%);
+    opacity: .9; pointer-events: none; }
+  body.hud .panel { display: block; }
+  #panelIzq { left: 5%; }
+  #panelDer { right: 5%; }
+  @media (max-width: 1100px) { .panel { display: none !important; } }
+  #reactor { width: 330px; height: 330px; max-width: 90%; cursor: pointer;
+    filter: drop-shadow(0 0 24px rgba(79,216,235,.18)); }
+  #fase {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 6px;
+    color: var(--cyan); text-transform: uppercase; height: 18px;
+    text-shadow: 0 0 10px rgba(79,216,235,.5);
+  }
+  #pista { font-size: 11px; letter-spacing: 1.5px; color: var(--cyan-dim); }
+
+  /* timers activos: countdown en vivo bajo el reactor */
+  #timers { display: flex; gap: 10px; min-height: 24px; flex-wrap: wrap;
+    justify-content: center; }
+  .timer {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 1.5px;
+    color: var(--ambar); border: 1px solid rgba(235,181,79,.3);
+    padding: 3px 12px; background: rgba(235,181,79,.05);
+    text-shadow: 0 0 8px rgba(235,181,79,.4);
+    clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+  }
+
+  /* ── Columna chat ── */
+  #ladoChat { display: flex; flex-direction: column; min-height: 0; padding: 0 22px; }
+  #chat {
+    flex: 1; overflow-y: auto; padding: 18px 6px 8px;
+    display: flex; flex-direction: column; gap: 12px;
+    scrollbar-width: thin; scrollbar-color: var(--cyan-dim) transparent;
+  }
+  .msg {
+    position: relative; max-width: 82%; padding: 11px 16px;
+    font-size: 15px; line-height: 1.55; white-space: pre-wrap;
+    background: var(--panel); border: 1px solid var(--border);
+    backdrop-filter: blur(3px);
+    animation: entrar .25s ease-out;
+    clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+  }
+  @keyframes entrar { from { opacity: 0; transform: translateY(8px) } to { opacity: 1 } }
+  .msg.vos    { align-self: flex-end; border-color: rgba(235,181,79,.28); color: #eee3c8;
+                background: rgba(235,181,79,.05); }
+  .msg.jarvis { align-self: flex-start; }
+  .msg.sys    { align-self: center; font-family: var(--mono); font-size: 11px;
+                color: var(--cyan-dim); border: none; background: none;
+                letter-spacing: 1.5px; clip-path: none; }
+  .msg .quien { font-family: var(--mono); font-size: 9px; letter-spacing: 3px;
+    color: var(--cyan-dim); display: block; margin-bottom: 5px; text-transform: uppercase; }
+  .msg.vos .quien { color: rgba(235,181,79,.55); }
+  .caret { display: inline-block; width: 8px; height: 14px; margin-left: 3px;
+    background: var(--cyan); vertical-align: text-bottom;
+    animation: parpadeo .7s steps(1) infinite; }
+  @keyframes parpadeo { 50% { opacity: 0 } }
+
+  /* ── Input ── */
+  #barra { display: flex; gap: 10px; padding: 14px 0 20px; }
+  #entrada {
+    flex: 1; background: var(--panel); border: 1px solid var(--border);
+    color: var(--text); padding: 13px 16px; font-family: var(--sans);
+    font-size: 15px; outline: none; letter-spacing: .3px;
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+    transition: border-color .2s, box-shadow .2s;
+  }
+  #entrada:focus { border-color: rgba(79,216,235,.45); box-shadow: 0 0 18px rgba(79,216,235,.12); }
+  #entrada::placeholder { color: rgba(201,233,239,.3); }
+  button {
+    background: var(--panel); border: 1px solid var(--border); color: var(--cyan);
+    padding: 0 20px; font-family: var(--mono); font-size: 11px; letter-spacing: 2px;
+    text-transform: uppercase; cursor: pointer; transition: all .2s;
+  }
+  button:hover { background: rgba(79,216,235,.14); box-shadow: 0 0 16px rgba(79,216,235,.2);
+    text-shadow: 0 0 8px var(--cyan); }
+
+  /* ── Modo HUD: sin chat log, subtítulo efímero bajo el reactor ── */
+  body.hud #main { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+  body.hud #ladoReactor { border-right: none; }
+  body.hud #chat { display: none; }
+  body.hud #ladoChat { width: min(760px, 94vw); justify-self: center; }
+  #subtitulo {
+    display: none; min-height: 96px; max-width: min(720px, 90vw);
+    margin-top: 10px; text-align: center;
+    font-size: 19px; line-height: 1.65; color: var(--text);
+    text-shadow: 0 0 18px rgba(79,216,235,.25);
+    opacity: 1; transition: opacity 1.4s ease;
+  }
+  body.hud #subtitulo { display: block; }
+  #subtitulo.apagado { opacity: 0; }
+  #subtitulo.dim { color: rgba(201,233,239,.45); font-size: 15px; }
+
+  #modo, #voz {
+    margin-left: 22px; padding: 6px 14px; font-size: 10px;
+    border-color: rgba(79,216,235,.25); align-self: center;
+  }
+  #voz { margin-left: 10px; }
+  #voz.libre { color: var(--ambar); border-color: rgba(235,181,79,.4);
+    text-shadow: 0 0 8px rgba(235,181,79,.5); }
+
+  /* ── Boot ── */
+  #boot {
+    position: fixed; inset: 0; z-index: 10; background: var(--bg);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 4px; transition: opacity .8s; font-family: var(--mono);
+  }
+  #boot.fuera { opacity: 0; pointer-events: none; }
+  #boot .linea { font-size: 12px; letter-spacing: 2px; color: var(--cyan-dim);
+    opacity: 0; animation: aparecer .3s forwards; }
+  #boot .linea b { color: var(--cyan); font-weight: 400; }
+  @keyframes aparecer { to { opacity: 1 } }
+  #iniciar {
+    margin-top: 30px; padding: 14px 42px; font-size: 13px; letter-spacing: 5px;
+    border-color: rgba(79,216,235,.4); opacity: 0; animation: aparecer .4s 1.6s forwards;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="particulas"></canvas>
+
+<div id="boot">
+  <div class="linea" style="animation-delay:.15s">&gt; NÚCLEO ............ <b>EN LÍNEA</b></div>
+  <div class="linea" style="animation-delay:.45s">&gt; MEMORIA ........... <b>VAULT MONTADO</b></div>
+  <div class="linea" style="animation-delay:.75s">&gt; CEREBRO ........... <b>SONNET · SUSCRIPCIÓN</b></div>
+  <div class="linea" style="animation-delay:1.05s">&gt; OÍDOS ............. <b>WHISPER LOCAL</b></div>
+  <div class="linea" style="animation-delay:1.35s">&gt; VOZ ............... <b>ANDREW · EDGE-TTS</b></div>
+  <button id="iniciar">iniciar</button>
+</div>
+
+<header>
+  <div id="titulo"><b>J.A.R.V.I.S.</b><small>just a rather very intelligent system</small></div>
+  <div id="telemetria">
+    <div class="dato"><div class="k">hora</div><div class="v" id="tHora">--:--:--</div></div>
+    <div class="dato"><div class="k">sesión</div><div class="v" id="tSesion">00:00</div></div>
+    <div class="dato"><div class="k">turnos</div><div class="v" id="tTurnos">0</div></div>
+    <div class="dato"><div class="k">latencia</div><div class="v" id="tLat">—</div></div>
+    <button id="modo" title="alternar entre modo HUD (subtítulos) y modo consola (chat completo)">modo · hud</button>
+    <button id="voz" title="manos libres: decí «hey jarvis» y hablá — sin clicks">voz · click</button>
+  </div>
+</header>
+
+<div id="main">
+  <div id="ladoReactor">
+    <canvas id="reactor" width="330" height="330" title="click: hablar / cortar / interrumpir"></canvas>
+    <div id="fase">en línea</div>
+    <div id="pista">click en el reactor para hablar · click de nuevo para cortar</div>
+    <div id="timers"></div>
+    <div id="subtitulo"></div>
+    <canvas id="panelIzq" class="panel" width="180" height="320"></canvas>
+    <canvas id="panelDer" class="panel" width="180" height="320"></canvas>
+  </div>
+
+  <div id="ladoChat">
+    <div id="chat">
+      <div class="msg sys">— sistemas en línea —</div>
+    </div>
+    <div id="barra">
+      <input id="entrada" placeholder="escribile a jarvis…" autocomplete="off">
+      <button id="enviar">enviar</button>
+      <button id="cerrar" title="guardar memoria al vault y cerrar sesión">guardar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const chat = $("#chat");
+const FASES = { listo: "en línea", escuchando: "escuchando…", transcribiendo: "transcribiendo…",
+                pensando: "procesando…", hablando: "hablando" };
+const COLORES = {
+  listo:          { main: "#4fd8eb", dim: "rgba(79,216,235," },
+  escuchando:     { main: "#ebb54f", dim: "rgba(235,181,79," },
+  transcribiendo: { main: "#9be8f2", dim: "rgba(155,232,242," },
+  pensando:       { main: "#9be8f2", dim: "rgba(155,232,242," },
+  hablando:       { main: "#4fd8eb", dim: "rgba(79,216,235," },
+};
+
+let grabando = false, ocupado = false, faseServidor = "listo";
+let manoActiva = null;  // nombre legible de la mano en ejecución (o null)
+const MANOS_NOMBRES = { Bash: "ejecutando acción…", Read: "leyendo el vault…",
+                        Grep: "buscando en el vault…", Glob: "buscando en el vault…" };
+let turnos = 0, inicio = Date.now();
+let nivelMic = 0, nivelSuave = 0;   // RMS del mic (servidor) → pulso del reactor
+const latencias = [];               // últimos turnos, para el panel de telemetría
+const ondas = [];                   // timestamps de clicks → anillos expandiéndose
+
+// ── Audio: TTS en el browser, con analizador para animar el reactor ─────
+let actx = null, analizador = null, fuente = null, sonando = false;
+let alArrancarAudio = null;  // hook: turno() lo usa para soltar el texto justo cuando suena la voz
+const cola = [];          // promesas de ArrayBuffer, en orden de oración
+const freqs = new Uint8Array(64);
+const onda = new Uint8Array(256);
+
+function prepararAudio() {
+  actx = new (window.AudioContext || window.webkitAudioContext)();
+  analizador = actx.createAnalyser();
+  analizador.fftSize = 512;
+  analizador.connect(actx.destination);
+}
+
+function decir(texto) {  // pide el mp3 ya (en paralelo) y lo encola en orden
+  if (!actx) return;
+  const p = fetch("/api/tts", { method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ texto }) })
+    .then(r => r.ok && r.status !== 204 ? r.arrayBuffer() : null)
+    .catch(() => null);
+  cola.push(p);
+  if (!sonando) reproducirCola();
+}
+
+async function reproducirCola() {
+  sonando = true;
+  api("hablando", { on: true }).catch(() => {});   // anti-eco: pausa el oído
+  while (cola.length) {
+    const datos = await cola.shift();
+    if (!datos || !datos.byteLength) continue;
+    try {
+      const buf = await actx.decodeAudioData(datos);
+      // recortar los colchones de silencio que edge-tts deja en las puntas
+      // de cada mp3: como la voz va por oración, cada "." pagaba ambos
+      // colchones y sonaba como una pausa robótica de ~2s entre oraciones
+      const ch = buf.getChannelData(0);
+      let ini = 0, fin = ch.length - 1;
+      while (ini < fin && Math.abs(ch[ini]) < 0.01) ini++;
+      while (fin > ini && Math.abs(ch[fin]) < 0.01) fin--;
+      const desde = Math.max(0, ini / buf.sampleRate - 0.04);
+      const dur = (fin - ini) / buf.sampleRate + 0.16;  // respiración natural
+      await new Promise(res => {
+        fuente = actx.createBufferSource();
+        fuente.buffer = buf;
+        fuente.connect(analizador);
+        fuente.onended = res;
+        fuente.start(0, desde, dur);
+        if (alArrancarAudio) { alArrancarAudio(); alArrancarAudio = null; }
+      });
+    } catch {}
+  }
+  fuente = null; sonando = false;
+  api("hablando", { on: false }).catch(() => {});  // el oído vuelve en 0.6s
+}
+
+function callar() {  // barge-in: cortar a jarvis a media frase
+  cola.length = 0;
+  try { fuente && fuente.stop(); } catch {}
+  sonando = false;
+  api("hablando", { on: false }).catch(() => {});
+}
+
+function bip(f, dur = 0.07, tipo = "sine", vol = 0.05) {
+  // sonido de interfaz generado al vuelo — sin archivos, estilo HUD
+  if (!actx) return;
+  const o = actx.createOscillator(), g = actx.createGain();
+  o.type = tipo; o.frequency.value = f;
+  g.gain.setValueAtTime(vol, actx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + dur);
+  o.connect(g); g.connect(actx.destination);
+  o.start(); o.stop(actx.currentTime + dur);
+}
+
+function nivelAudio() {  // amplitud 0..1 de lo que está sonando
+  if (!analizador || !sonando) return 0;
+  analizador.getByteTimeDomainData(onda);
+  let sum = 0;
+  for (let i = 0; i < onda.length; i++) { const d = (onda[i] - 128) / 128; sum += d * d; }
+  return Math.min(1, Math.sqrt(sum / onda.length) * 3.2);
+}
+
+// ── Subtítulo (modo HUD): espeja el turno actual y se desvanece al callar ─
+const subEl = $("#subtitulo");
+let subUltimo = 0;
+function subPoner(texto, dim = false) {
+  subEl.textContent = texto;
+  subEl.classList.toggle("dim", dim);
+  subEl.classList.remove("apagado");
+  subUltimo = Date.now();
+}
+function subSumar(texto) {
+  subEl.textContent += texto;
+  subEl.classList.remove("apagado");
+  subUltimo = Date.now();
+}
+// el subtítulo se apaga solo cuando la voz ya terminó y nada está en curso
+setInterval(() => {
+  if (subEl.textContent && !sonando && !ocupado && Date.now() - subUltimo > 3500)
+    subEl.classList.add("apagado");
+}, 500);
+
+// ── Modo HUD ↔ consola ───────────────────────────────────────────────────
+function ponerModo(m) {
+  document.body.classList.toggle("hud", m === "hud");
+  $("#modo").textContent = "modo · " + m;
+  localStorage.setItem("jarvis-modo", m);
+}
+$("#modo").onclick = () =>
+  ponerModo(document.body.classList.contains("hud") ? "consola" : "hud");
+ponerModo(localStorage.getItem("jarvis-modo") || "hud");
+
+// ── Chat ─────────────────────────────────────────────────────────────────
+function msg(quien, texto) {
+  if (quien === "sys") {
+    subPoner(texto, true);  // en HUD los avisos también se ven
+    if (texto.includes("⚠")) bip(196, 0.2, "sawtooth", 0.04);
+  }
+  const d = document.createElement("div");
+  if (quien === "sys") { d.className = "msg sys"; d.textContent = texto; }
+  else {
+    d.className = "msg " + quien;
+    d.innerHTML = `<span class="quien">${quien === "vos" ? "charles" : "jarvis"}</span>`;
+    d.appendChild(document.createTextNode(texto));
+  }
+  chat.appendChild(d);
+  chat.scrollTop = chat.scrollHeight;
+  return d;
+}
+
+function msgStreaming() {  // burbuja de jarvis que se va llenando en vivo
+  const d = document.createElement("div");
+  d.className = "msg jarvis";
+  d.innerHTML = `<span class="quien">jarvis</span><span class="cuerpo"></span><span class="caret"></span>`;
+  chat.appendChild(d);
+  chat.scrollTop = chat.scrollHeight;
+  let subIniciado = false;  // el primer delta limpia el prelude del subtítulo
+  return {
+    delta(t) {
+      d.querySelector(".cuerpo").textContent += t; chat.scrollTop = chat.scrollHeight;
+      if (!subIniciado) { subPoner(""); subIniciado = true; }
+      subSumar(t);
+    },
+    fin(t)   { d.querySelector(".cuerpo").textContent = t; d.querySelector(".caret").remove(); subPoner(t); },
+    error(t) { d.remove(); msg("sys", "⚠ " + t); },
+  };
+}
+
+async function api(ruta, body, ms = 15000) {
+  // timeout siempre: si un endpoint se cuelga, la UI no puede quedar rehén
+  const r = await fetch("/api/" + ruta, {
+    method: body === undefined ? "GET" : "POST",
+    headers: { "Content-Type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+    signal: AbortSignal.timeout(ms),
+  });
+  return r.json();
+}
+
+// ── Un turno, en streaming ───────────────────────────────────────────────
+async function turno(texto) {
+  ocupado = true;
+  msg("vos", texto);
+  subPoner("» " + texto, true);  // en HUD: tus palabras, hasta que jarvis hable
+  const burbuja = msgStreaming();
+  const t0 = performance.now();
+  let primera = true;
+  // texto y voz sincronizados: el texto se retiene hasta que la voz arranca
+  // de verdad (o 2.5s de fallback si el TTS no aparece — p.ej. sin internet),
+  // así jarvis habla "de un solo" en vez de texto primero y voz después
+  let retenido = "", revelado = false, timerRevelar = null, finTexto = null;
+  const revelar = () => {
+    if (revelado) return;
+    revelado = true;
+    clearTimeout(timerRevelar);
+    if (retenido) { burbuja.delta(retenido); retenido = ""; }
+    if (finTexto !== null) burbuja.fin(finTexto);
+  };
+  alArrancarAudio = revelar;
+  try {
+    const r = await fetch("/api/stream", { method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ texto }) });
+    const reader = r.body.getReader();
+    const dec = new TextDecoder();
+    let buf = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let i;
+      while ((i = buf.indexOf("\n\n")) >= 0) {
+        const linea = buf.slice(0, i).split("\n").find(l => l.startsWith("data: "));
+        buf = buf.slice(i + 2);
+        if (!linea) continue;
+        const ev = JSON.parse(linea.slice(6));
+        if (primera && (ev.tipo === "delta" || ev.tipo === "oracion")) {
+          primera = false;
+          const lat = (performance.now() - t0) / 1000;
+          $("#tLat").textContent = lat.toFixed(1) + "s";
+          latencias.push(lat);
+          if (latencias.length > 24) latencias.shift();
+        }
+        if (ev.tipo !== "mano") manoActiva = null;  // la mano terminó: volvió el texto
+        if (ev.tipo === "delta") {
+          if (revelado) burbuja.delta(ev.texto);
+          else {
+            retenido += ev.texto;
+            if (!timerRevelar) timerRevelar = setTimeout(revelar, 2500);
+          }
+        }
+        else if (ev.tipo === "mano") {
+          manoActiva = MANOS_NOMBRES[ev.texto] || "ejecutando acción…";
+          $("#fase").textContent = manoActiva;
+          msg("sys", "⚙ " + manoActiva);
+        }
+        else if (ev.tipo === "oracion") decir(ev.texto);
+        else if (ev.tipo === "fin") {
+          turnos++; $("#tTurnos").textContent = turnos;
+          finTexto = ev.texto;               // el fin también espera a la voz
+          if (revelado) burbuja.fin(ev.texto);
+          else if (!timerRevelar) timerRevelar = setTimeout(revelar, 2500);
+        }
+        else if (ev.tipo === "error") { revelar(); burbuja.error(ev.texto); }
+      }
+    }
+  } catch (e) {
+    revelar();
+    burbuja.error(e.message || "se cortó la conexión");
+  } finally {
+    // ojo: el hook alArrancarAudio NO se limpia acá — la voz puede arrancar
+    // después de que el stream de texto terminó, y ahí recién se revela
+    ocupado = false;
+  }
+}
+
+// ── Reactor: click = hablar / cortar / interrumpir ──────────────────────
+$("#reactor").onclick = async () => {
+  ondas.push(performance.now());              // anillo expandiéndose al click
+  if (sonando) { callar(); bip(440, 0.09); return; }   // interrumpir a jarvis
+  if (ocupado) return;
+  if (!grabando) {
+    try {
+      const r = await api("mic/start", {});
+      if (r.error) { msg("sys", "⚠ mic: " + r.error); return; }  // nunca en silencio
+      grabando = true;
+      bip(880, 0.06); setTimeout(() => bip(1245, 0.08), 70);     // "te escucho"
+    } catch (e) { msg("sys", "⚠ mic: " + (e.message || "no respondió")); }
+  } else {
+    bip(660, 0.08);                                               // "recibido"
+    grabando = false; ocupado = true;
+    try {
+      // 90s: la primera transcripción puede pagar la carga de Whisper
+      const r = await api("mic/stop", {}, 90000);
+      ocupado = false;
+      if (r.error) msg("sys", "⚠ " + r.error);
+      else await turno(r.texto);
+    } catch (e) {
+      msg("sys", "⚠ mic: " + (e.message || "no respondió"));
+    } finally { ocupado = false; }
+  }
+};
+
+// ── Texto ────────────────────────────────────────────────────────────────
+async function enviarTexto() {
+  const t = $("#entrada").value.trim();
+  if (!t || ocupado || grabando) return;
+  $("#entrada").value = "";
+  await turno(t);
+}
+$("#enviar").onclick = enviarTexto;
+$("#entrada").addEventListener("keydown", e => { if (e.key === "Enter") enviarTexto(); });
+
+// ── Guardar sesión (memoria al vault) ────────────────────────────────────
+$("#cerrar").onclick = async () => {
+  if (ocupado || grabando) return;
+  ocupado = true;
+  try {
+    const r = await api("salir", {});
+    if (r.nota) { msg("sys", "memoria guardada → " + r.nota); decir(r.despedida); }
+    else msg("sys", r.error ? "⚠ " + r.error : "sesión vacía, nada que guardar");
+  } finally { ocupado = false; }
+};
+
+// ── Estado + telemetría ──────────────────────────────────────────────────
+let manosLibres = false, faseAnterior = "listo", ultimoResync = 0;
+setInterval(async () => {
+  try {
+    // ?hablando=1 es el heartbeat anti-eco: sostiene la pausa del oído
+    // mientras la voz suena — si un "off" se pierde, el oído se recupera solo
+    const e = await api("estado" + (sonando ? "?hablando=1" : ""));
+    nivelMic = e.nivel || 0;
+    if (e.manos_error) msg("sys", "⚠ manos libres: " + e.manos_error);
+
+    // aviso de timer vencido: bip de atención + jarvis lo dice por voz
+    if (e.aviso) {
+      msg("sys", "⏱ " + e.aviso);
+      bip(1245, 0.12); setTimeout(() => bip(880, 0.12), 140);
+      decir(e.aviso);
+    }
+
+    // timers activos: countdown en vivo bajo el reactor
+    const esc = s => s.replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+    $("#timers").innerHTML = (e.timers || []).map(t =>
+      `<div class="timer">⏱ ${String(Math.floor(t.resta / 60)).padStart(2, "0")}:` +
+      `${String(t.resta % 60).padStart(2, "0")}` +
+      `${t.etiqueta ? " · " + esc(t.etiqueta) : ""}</div>`).join("");
+
+    // resync: este tab cree que manos libres está on pero el servidor dice
+    // off (server reiniciado, oído muerto) → re-encenderlo, no morir mudo
+    if (manosLibres && e.manos === false && Date.now() - ultimoResync > 5000) {
+      ultimoResync = Date.now();
+      ponerVoz(true);
+    }
+
+    // cue de despertar: el oído oyó "hey jarvis" (transición a escuchando
+    // que no vino de un click nuestro)
+    if (manosLibres && e.fase === "escuchando" && faseAnterior !== "escuchando"
+        && !grabando) { bip(880, 0.06); setTimeout(() => bip(1245, 0.08), 70); }
+    faseAnterior = e.fase;
+    faseServidor = e.fase;
+
+    // turno capturado por manos libres → reclamarlo y disparar el loop normal
+    if (e.pendiente && !ocupado && !sonando) {
+      const r = await api("pendiente", {});
+      if (r.texto) turno(r.texto);
+    }
+
+    // re-sincronizar push-to-talk: si el servidor está grabando y este tab
+    // no lo sabe, el próximo click debe CORTAR, no volver a iniciar.
+    if (!manosLibres && faseServidor === "escuchando" && !grabando && !ocupado)
+      grabando = true;
+  } catch {}
+}, 400);
+
+// ── Toggle manos libres ──────────────────────────────────────────────────
+async function ponerVoz(libre) {
+  try {
+    const r = await api("manos_libres", { on: libre });
+    manosLibres = r.on;
+  } catch { manosLibres = false; }
+  $("#voz").textContent = "voz · " + (manosLibres ? "hey jarvis" : "click");
+  $("#voz").classList.toggle("libre", manosLibres);
+  $("#pista").textContent = manosLibres
+    ? "decí «hey jarvis» y hablá — click en el reactor solo para interrumpir"
+    : "click en el reactor para hablar · click de nuevo para cortar";
+  localStorage.setItem("jarvis-voz", manosLibres ? "libre" : "click");
+}
+$("#voz").onclick = () => ponerVoz(!manosLibres);
+// restaurar manos libres apenas carga la página (también con ?sin-boot):
+// el oído es del servidor, no necesita el click que desbloquea el audio
+if (localStorage.getItem("jarvis-voz") === "libre") ponerVoz(true);
+
+function faseActual() { return sonando ? "hablando" : faseServidor; }
+
+setInterval(() => {
+  const ahora = new Date();
+  $("#tHora").textContent = ahora.toTimeString().slice(0, 8);
+  const s = Math.floor((Date.now() - inicio) / 1000);
+  $("#tSesion").textContent =
+    String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
+  $("#fase").textContent = manoActiva || FASES[faseActual()] || faseActual();
+}, 1000);
+
+// ── Reactor (canvas) ─────────────────────────────────────────────────────
+const lienzo = $("#reactor"), ctx = lienzo.getContext("2d");
+const DPR = window.devicePixelRatio || 1;
+lienzo.width = 330 * DPR; lienzo.height = 330 * DPR;
+ctx.scale(DPR, DPR);
+const CX = 165, CY = 165;
+
+function dibujarReactor(t) {
+  const fase = faseActual();
+  const c = COLORES[fase] || COLORES.listo;
+  // amplitud: la voz de jarvis (analizador) o TU voz (nivel del mic, servidor)
+  const objetivo = sonando ? nivelAudio()
+                 : fase === "escuchando" ? Math.min(1, nivelMic * 16) : 0;
+  nivelSuave += (objetivo - nivelSuave) * 0.3;  // suavizado entre polls (calibrado a 30fps)
+  const amp = nivelSuave;
+  ctx.clearRect(0, 0, 330, 330);
+
+  // velocidad de giro según estado
+  const vel = { listo: .18, escuchando: .55, transcribiendo: 1.6, pensando: 1.6, hablando: .7 }[fase] || .18;
+  const respiro = Math.sin(t * (fase === "listo" ? 1.1 : 3.4)) * .5 + .5;
+
+  if (sonando && analizador) analizador.getByteFrequencyData(freqs);
+
+  // núcleo — el glow es el propio gradiente radial, sin shadowBlur: el blur
+  // se re-renderiza por frame y era lo más caro del canvas (lag al hablar)
+  const rN = 27 + respiro * 3 + amp * 15;
+  const rG = rN * 1.9 + 18 + amp * 20 + respiro * 4;
+  const grad = ctx.createRadialGradient(CX, CY, 0, CX, CY, rG);
+  grad.addColorStop(0, "#f4feff");
+  grad.addColorStop(.3, c.main);
+  grad.addColorStop(1, "transparent");
+  ctx.fillStyle = grad;
+  ctx.beginPath(); ctx.arc(CX, CY, rG, 0, 7); ctx.fill();
+
+  // anillo de bobinas (10 segmentos, gira)
+  ctx.lineWidth = 11;
+  for (let i = 0; i < 10; i++) {
+    const a = t * vel + i * Math.PI / 5;
+    ctx.strokeStyle = c.dim + (.55 + respiro * .2) + ")";
+    ctx.beginPath(); ctx.arc(CX, CY, 66, a, a + .44); ctx.stroke();
+  }
+
+  // anillo punteado (contra-gira)
+  ctx.lineWidth = 1.4;
+  ctx.strokeStyle = c.dim + ".5)";
+  ctx.setLineDash([2, 7]);
+  ctx.beginPath(); ctx.arc(CX, CY, 90, -t * vel * 1.6, -t * vel * 1.6 + 7); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // anillo de marcas (72 ticks, las largas cada 6)
+  for (let i = 0; i < 72; i++) {
+    const a = i * Math.PI / 36 + t * .04;
+    const L = i % 6 === 0 ? 9 : 4;
+    ctx.strokeStyle = c.dim + (i % 6 === 0 ? ".55)" : ".3)");
+    ctx.lineWidth = i % 6 === 0 ? 1.6 : 1;
+    ctx.beginPath();
+    ctx.moveTo(CX + Math.cos(a) * 112, CY + Math.sin(a) * 112);
+    ctx.lineTo(CX + Math.cos(a) * (112 + L), CY + Math.sin(a) * (112 + L));
+    ctx.stroke();
+  }
+
+  // cometa: arco rápido cuando procesa
+  if (fase === "pensando" || fase === "transcribiendo") {
+    ctx.lineWidth = 2.2;
+    ctx.strokeStyle = c.main;
+    const a = t * 3.4;
+    ctx.beginPath(); ctx.arc(CX, CY, 101, a, a + 1.1); ctx.stroke();
+    ctx.beginPath(); ctx.arc(CX, CY, 101, a + Math.PI, a + Math.PI + 1.1); ctx.stroke();
+  }
+
+  // barras de espectro cuando habla (la voz, en vivo)
+  if (sonando) {
+    ctx.lineWidth = 2.4;
+    for (let i = 0; i < 56; i++) {
+      const a = i * Math.PI / 28 - Math.PI / 2;
+      const f = freqs[Math.floor(i * freqs.length / 56)] / 255;
+      const L = 3 + f * 22;
+      ctx.strokeStyle = c.dim + (.25 + f * .65) + ")";
+      ctx.beginPath();
+      ctx.moveTo(CX + Math.cos(a) * 128, CY + Math.sin(a) * 128);
+      ctx.lineTo(CX + Math.cos(a) * (128 + L), CY + Math.sin(a) * (128 + L));
+      ctx.stroke();
+    }
+  }
+
+  // texto circular girando: la fase actual, estilo Iron Man
+  const rotulo = ("  J.A.R.V.I.S  ·  " + (FASES[fase] || fase) + "  ·").toUpperCase();
+  ctx.font = "9px 'Share Tech Mono', monospace";
+  ctx.fillStyle = c.dim + ".55)";
+  for (let i = 0; i < rotulo.length; i++) {
+    const a = t * .1 + i * 2 * Math.PI / rotulo.length;
+    ctx.save();
+    ctx.translate(CX + Math.cos(a) * 156, CY + Math.sin(a) * 156);
+    ctx.rotate(a + Math.PI / 2);
+    ctx.fillText(rotulo[i], -3, 0);
+    ctx.restore();
+  }
+
+  // ondas de click: anillos que se expanden y mueren
+  const ahora = performance.now();
+  for (let i = ondas.length - 1; i >= 0; i--) {
+    const edad = (ahora - ondas[i]) / 800;
+    if (edad >= 1) { ondas.splice(i, 1); continue; }
+    ctx.lineWidth = 1.6;
+    ctx.strokeStyle = c.dim + (1 - edad) * .6 + ")";
+    ctx.beginPath(); ctx.arc(CX, CY, 40 + edad * 115, 0, 7); ctx.stroke();
+  }
+
+  // pulso de escucha: ondas que se expanden hacia el centro
+  if (fase === "escuchando") {
+    const p = (t * .9) % 1;
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = c.dim + (1 - p) * .5 + ")";
+    ctx.beginPath(); ctx.arc(CX, CY, 130 - p * 60, 0, 7); ctx.stroke();
+  }
+
+  // aro exterior fijo
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = c.dim + ".22)";
+  ctx.beginPath(); ctx.arc(CX, CY, 146, 0, 7); ctx.stroke();
+}
+
+// ── Partículas de fondo ──────────────────────────────────────────────────
+const pCanvas = $("#particulas"), pCtx = pCanvas.getContext("2d");
+let particulas = [];
+function armarParticulas() {
+  pCanvas.width = innerWidth; pCanvas.height = innerHeight;
+  particulas = Array.from({ length: 50 }, () => ({
+    x: Math.random() * innerWidth, y: Math.random() * innerHeight,
+    v: .12 + Math.random() * .3, r: .6 + Math.random() * 1.3,
+    o: .08 + Math.random() * .2,
+  }));
+}
+armarParticulas();
+addEventListener("resize", armarParticulas);
+
+function dibujarParticulas() {
+  pCtx.clearRect(0, 0, pCanvas.width, pCanvas.height);
+  for (const p of particulas) {
+    p.y -= p.v;
+    if (p.y < -4) { p.y = innerHeight + 4; p.x = Math.random() * innerWidth; }
+    pCtx.fillStyle = `rgba(79,216,235,${p.o})`;
+    pCtx.beginPath(); pCtx.arc(p.x, p.y, p.r, 0, 7); pCtx.fill();
+  }
+}
+
+// ── Paneles FUI laterales (modo HUD): decorativos pero con datos reales ──
+function prepararPanel(sel) {
+  const cv = $(sel), c2 = cv.getContext("2d");
+  const w = cv.width, h = cv.height;
+  cv.width = w * DPR; cv.height = h * DPR;
+  cv.style.width = w + "px"; cv.style.height = h + "px";
+  c2.scale(DPR, DPR);
+  return [c2, w, h];
+}
+const [pzCtx, PZW, PZH] = prepararPanel("#panelIzq");
+const [pdCtx, PDW, PDH] = prepararPanel("#panelDer");
+
+function marcoPanel(c2, w, h, titulo) {
+  c2.clearRect(0, 0, w, h);
+  c2.strokeStyle = "rgba(79,216,235,.3)"; c2.lineWidth = 1;
+  // esquinas tipo bracket
+  const L = 14;
+  [[0,0,L,0,0,L],[w,0,w-L,0,w,L],[0,h,L,h,0,h-L],[w,h,w-L,h,w,h-L]].forEach(([x,y,x2,y2,x3,y3]) => {
+    c2.beginPath(); c2.moveTo(x2,y2); c2.lineTo(x,y); c2.lineTo(x3,y3); c2.stroke();
+  });
+  c2.font = "8px 'Share Tech Mono', monospace";
+  c2.fillStyle = "rgba(79,216,235,.5)";
+  c2.fillText(titulo, 10, 16);
+}
+
+function dibujarPaneles(t) {
+  if (!document.body.classList.contains("hud")) return;
+  const fase = faseActual();
+
+  // ── izquierda: espectro / actividad de audio ──
+  marcoPanel(pzCtx, PZW, PZH, "AUDIO // ESPECTRO");
+  const nB = 14, bw = (PZW - 40) / nB;
+  for (let i = 0; i < nB; i++) {
+    let v;  // 0..1 por barra, según qué esté sonando de verdad
+    if (sonando)                 v = freqs[Math.floor(i * freqs.length / nB)] / 255;
+    else if (fase === "escuchando") v = Math.min(1, nivelMic * 16) * (.4 + .6 * Math.abs(Math.sin(t * 3 + i)));
+    else                         v = .06 + .05 * Math.sin(t * 1.2 + i * .9);
+    const bh = 4 + v * (PZH - 90);
+    pzCtx.fillStyle = `rgba(79,216,235,${.18 + v * .6})`;
+    pzCtx.fillRect(20 + i * bw, PZH - 40 - bh, bw - 3, bh);
+  }
+  pzCtx.fillStyle = "rgba(79,216,235,.45)";
+  pzCtx.fillText(sonando ? "TTS · ANDREW" : fase === "escuchando" ? "MIC · WHISPER" : "IDLE", 10, PZH - 14);
+
+  // ── derecha: telemetría del cerebro ──
+  marcoPanel(pdCtx, PDW, PDH, "CEREBRO // TELEMETRÍA");
+  pdCtx.font = "26px 'Share Tech Mono', monospace";
+  pdCtx.fillStyle = "rgba(79,216,235,.85)";
+  pdCtx.fillText(String(turnos).padStart(2, "0"), 10, 52);
+  pdCtx.font = "8px 'Share Tech Mono', monospace";
+  pdCtx.fillStyle = "rgba(79,216,235,.5)";
+  pdCtx.fillText("TURNOS", 10, 64);
+  pdCtx.fillText("LATENCIA / TURNO (s)", 10, 96);
+  // sparkline de latencias reales
+  if (latencias.length > 1) {
+    const max = Math.max(...latencias, 3);
+    pdCtx.strokeStyle = "rgba(79,216,235,.7)"; pdCtx.lineWidth = 1.4;
+    pdCtx.beginPath();
+    latencias.forEach((v, i) => {
+      const x = 10 + i * (PDW - 20) / 23;
+      const y = 170 - (v / max) * 62;
+      i ? pdCtx.lineTo(x, y) : pdCtx.moveTo(x, y);
+    });
+    pdCtx.stroke();
+  } else {
+    pdCtx.fillText("— sin datos aún —", 10, 140);
+  }
+  // anillo de sesión (minutos, gira mientras corre)
+  const min = (Date.now() - inicio) / 60000;
+  pdCtx.strokeStyle = "rgba(79,216,235,.25)"; pdCtx.lineWidth = 3;
+  pdCtx.beginPath(); pdCtx.arc(PDW / 2, PDH - 70, 26, 0, 7); pdCtx.stroke();
+  pdCtx.strokeStyle = "rgba(79,216,235,.8)";
+  pdCtx.beginPath();
+  pdCtx.arc(PDW / 2, PDH - 70, 26, -Math.PI / 2, -Math.PI / 2 + (min % 60) / 60 * 2 * Math.PI);
+  pdCtx.stroke();
+  pdCtx.textAlign = "center";
+  pdCtx.fillText("SESIÓN", PDW / 2, PDH - 66);
+  pdCtx.textAlign = "left";
+  pdCtx.fillText("SONNET · SUSCRIPCIÓN", 10, PDH - 14);
+}
+
+// ── Loop de render ───────────────────────────────────────────────────────
+// 30fps, no 60: el canvas compite por el M2 con Whisper y el oído de manos
+// libres, y a 60fps la página se ponía laggy al hablar. A 30 no se nota en
+// una animación ambiental. Durante la transcripción (el pico de CPU) las
+// partículas y los paneles FUI se congelan; solo el reactor sigue vivo.
+let frameAnterior = 0;
+(function render(now = 0) {
+  requestAnimationFrame(render);
+  if (now - frameAnterior < 33) return;
+  frameAnterior = now;
+  const t = now / 1000;
+  dibujarReactor(t);
+  if (faseActual() !== "transcribiendo") {
+    dibujarParticulas();
+    dibujarPaneles(t);
+  }
+})();
+
+// ── Boot: el click desbloquea el audio del browser ───────────────────────
+$("#iniciar").onclick = () => {
+  prepararAudio();
+  $("#boot").classList.add("fuera");
+  const h = new Date().getHours();
+  const saludo = h < 12 ? "Buenos días" : h < 19 ? "Buenas tardes" : "Buenas noches";
+  // intro estilo película (Iron Man 3 Second Screen) solo en el primer boot
+  // del día; los demás boots usan el saludo corto para no cansar
+  const hoy = new Date().toDateString();
+  if (localStorage.getItem("jarvis-intro") !== hoy) {
+    localStorage.setItem("jarvis-intro", hoy);
+    decir(`${saludo}, Charles.`);
+    decir("Permitime presentarme: soy Jarvis, una inteligencia artificial " +
+          "virtual, y estoy acá para asistirte con una variedad de tareas " +
+          "lo mejor que pueda, las 24 horas del día, los 7 días de la semana.");
+    decir("Importando tus preferencias desde el vault. Los sistemas están " +
+          "ahora completamente operativos.");
+  } else {
+    decir(`${saludo}, Charles. Sistemas en línea.`);
+  }
+  $("#entrada").focus();
+};
+
+// modo dev: ?sin-boot salta la secuencia (queda sin audio: el click de
+// "iniciar" es lo que desbloquea el AudioContext del browser)
+if (location.search.includes("sin-boot")) $("#boot").classList.add("fuera");
+</script>
+</body>
+</html>
