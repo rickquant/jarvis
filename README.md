@@ -1,91 +1,93 @@
 # Jarvis 🔵
 
-Asistente de voz personal estilo J.A.R.V.I.S., corriendo **local en macOS a costo $0**.
-Le decís *"jarvis"*, le hablás, y responde por voz con memoria real de quién sos y en qué estás trabajando — mientras un HUD tipo Iron Man muestra lo que pasa.
+*[English](README.md) · [Español](README.es.md)*
 
-> 🎬 *Video demo: próximamente.*
+A J.A.R.V.I.S.-style personal voice assistant running **locally on macOS at $0 cost**.
+Say *"jarvis"*, talk to it, and it answers out loud with real memory of who you are and what you're working on — while an Iron Man-style HUD shows what's happening.
 
-## Qué hace
+> 🎬 *Demo video: coming soon.*
 
-- **Manos libres**: wake word *"jarvis"* (openWakeWord, local) + VAD adaptativo — hablás y al callarte corta solo. Cero clicks.
-- **Conversación con memoria**: sabe quién es su usuario, sus proyectos y decisiones pasadas, y **recuerda entre sesiones** (ver diseño de memoria abajo).
-- **Manos**: abre y cierra apps, controla Spotify y el volumen, pone timers hablados, captura notas por voz y busca en su propia memoria — con un modelo de seguridad de allowlist.
-- **HUD web**: arc reactor animado que reacciona a la voz, subtítulos sincronizados, telemetría en vivo (latencias, timers activos, qué herramienta está ejecutando).
-- **Barge-in**: lo podés interrumpir a media frase con un click.
+## What it does
 
-## Arquitectura
+- **Hands-free**: *"jarvis"* wake word (openWakeWord, local) + adaptive VAD — speak, and it auto-stops when you go quiet. Zero clicks.
+- **Conversation with memory**: it knows its user, their projects and past decisions, and **remembers across sessions** (see the memory design below).
+- **Hands**: opens and closes apps, controls Spotify and system volume, sets spoken timers, captures voice notes, and searches its own memory — behind an allowlist security model.
+- **Web HUD**: an animated arc reactor that reacts to the voice, subtitles synced to speech, live telemetry (latencies, active timers, which tool is running).
+- **Barge-in**: interrupt it mid-sentence with a click.
+
+## Architecture
 
 ```
-        ┌─ OÍDO ──────────────┐   ┌─ CEREBRO ──────────────┐   ┌─ VOZ ─────────────┐
- 🎤 ──▶ │ openWakeWord (local) │──▶│ Claude vía `claude -p` │──▶│ edge-tts, síntesis │──▶ 🔊
-        │ + VAD adaptativo     │   │ streaming + tool use   │   │ por oración en     │
-        │ + Whisper MLX (local)│   │ con allowlist          │   │ paralelo al stream │
+        ┌─ EARS ──────────────┐   ┌─ BRAIN ────────────────┐   ┌─ VOICE ───────────┐
+ 🎤 ──▶ │ openWakeWord (local) │──▶│ Claude via `claude -p` │──▶│ edge-tts, per-    │──▶ 🔊
+        │ + adaptive VAD       │   │ streaming + tool use   │   │ sentence synthesis │
+        │ + Whisper MLX (local)│   │ behind an allowlist    │   │ in parallel        │
         └──────────────────────┘   └───────────┬────────────┘   └───────────────────┘
-                                               │ lee / escribe
+                                               │ reads / writes
                                    ┌───────────▼────────────┐
-                                   │ MEMORIA: vault Obsidian │
-                                   │ (markdown local)        │
+                                   │ MEMORY: Obsidian vault  │
+                                   │ (local markdown)        │
                                    └─────────────────────────┘
-                       HUD (Flask + canvas) orquesta todo en el browser
+                     The HUD (Flask + canvas) orchestrates it all in the browser
 ```
 
-**Decisión de fondo: la voz es interfaz, no arquitectura.** `jarvis_voz.py` y el HUD envuelven el mismo loop de `jarvis_cli.py` sin tocarlo — el cerebro no sabe si le hablaste o escribiste.
+**Core design decision: voice is an interface, not architecture.** `jarvis_voz.py` and the HUD wrap the same loop from `jarvis_cli.py` without touching it — the brain doesn't know whether you spoke or typed.
 
-## El diseño de memoria (la parte interesante)
+## The memory design (the interesting part)
 
-La memoria no es un vector store: es un **vault de Obsidian** (markdown plano) con instrucciones en capas:
+Memory is not a vector store: it's an **Obsidian vault** (plain markdown) with layered instructions:
 
-1. **Capa de estrategia** — quién es el usuario, cómo hablarle, estructura del vault. Se carga siempre.
-2. **Capa técnica por proyecto** — stack, decisiones y estado del proyecto activo. Se carga según contexto.
-3. **Al cerrar sesión**, Jarvis escribe un resumen de lo aprendido de vuelta al vault.
+1. **Strategy layer** — who the user is, how to talk to them, vault structure. Always loaded.
+2. **Per-project technical layer** — stack, decisions, and state of the active project. Loaded by context.
+3. **On session close**, Jarvis writes a summary of what it learned back to the vault.
 
-El loop completo: `leer contexto del vault → llamar a Claude → responder → escribir lo aprendido`. La próxima sesión retoma sin re-explicar nada. Ventaja sobre embeddings: la memoria es **legible, editable y versionable por el humano** — el usuario ve y controla exactamente qué sabe su asistente.
+The full loop: `read vault context → call Claude → respond → write back what was learned`. The next session picks up without re-explaining anything. The advantage over embeddings: memory is **human-readable, editable, and versionable** — the user sees and controls exactly what their assistant knows.
 
-## Manos y seguridad
+## Hands and security
 
-Las acciones corren vía tool use de `claude -p` con `--allowedTools` de **prefijos exactos**: la seguridad es el menú de comandos permitidos, no el prompt. Lo que no está en la allowlist lo deniega el CLI antes de ejecutarse — pedirle "borrá tal archivo" no funciona ni con prompt injection, porque la herramienta simplemente no existe para él.
+Actions run through `claude -p` tool use with `--allowedTools` restricted to **exact prefixes**: security is the menu of allowed commands, not the prompt. Anything not on the allowlist is denied by the CLI before it runs — asking it to "delete that file" doesn't work even via prompt injection, because the tool simply doesn't exist for it.
 
-## Latencia a costo $0
+## Latency at $0
 
-Sin Realtime APIs pagas, la fluidez sale de ingeniería:
+With no paid Realtime APIs, fluidity comes from engineering:
 
-- **Streaming por oraciones**: el TTS sintetiza cada oración en paralelo mientras el resto de la respuesta sigue llegando — Jarvis empieza a hablar antes de terminar de pensar.
-- **Pre-roll buffer**: ~1.2s de audio previo al wake word se anteponen a la captura — no se pierde lo dicho de corrido.
-- **Recorte de silencios** en las fronteras de cada mp3 (los colchones de edge-tts sonaban como pausas robóticas).
-- **Whisper 8-bit** (large-v3-turbo cuantizado): mitad de memoria que fp16, clave en una Mac de 8GB.
-- **Anuncio antes de ejecutar**: "Dale, lo abro" suena mientras la herramienta corre — la espera nunca es muda.
+- **Per-sentence streaming**: TTS synthesizes each sentence in parallel while the rest of the response is still arriving — Jarvis starts talking before it finishes thinking.
+- **Pre-roll buffer**: ~1.2s of audio before the wake word is prepended to the capture — nothing said in one breath gets lost.
+- **Silence trimming** at each mp3's boundaries (edge-tts padding sounded like robotic pauses).
+- **8-bit Whisper** (quantized large-v3-turbo): half the memory of fp16 — crucial on an 8GB Mac.
+- **Announce before executing**: "On it." plays while the tool runs — the wait is never silent.
 
-## Correrlo
+## Running it
 
-Requisitos: macOS Apple Silicon, Python 3.10+, [Claude Code](https://claude.com/claude-code) con sesión iniciada (suscripción — sin API key), internet para el TTS.
+Requirements: macOS on Apple Silicon, Python 3.10+, [Claude Code](https://claude.com/claude-code) logged in (subscription — no API key), internet for TTS.
 
 ```bash
 pip install -r requirements.txt
-python3 jarvis_ui.py <ruta-a-tu-vault>   # HUD completo en localhost:7777
-python3 jarvis_voz.py <ruta-a-tu-vault>  # solo voz, en terminal
-python3 jarvis_cli.py <ruta-a-tu-vault>  # solo texto
+python3 jarvis_ui.py <path-to-your-vault>   # full HUD at localhost:7777
+python3 jarvis_voz.py <path-to-your-vault>  # voice only, in the terminal
+python3 jarvis_cli.py <path-to-your-vault>  # text only
 ```
 
-La primera corrida descarga los modelos (Whisper, wake word) y macOS pide permiso de micrófono. El vault necesita un `CLAUDE.md` raíz con el contexto del usuario — la persona está adaptada a su usuario original; ajustá `PERSONA` en `jarvis_voz.py` y `RESPELL` para el tuyo.
+The first run downloads the models (Whisper, wake word) and macOS asks for microphone permission. The vault needs a root `CLAUDE.md` with the user's context — the persona is tuned to its original user; adjust `PERSONA` in `jarvis_voz.py` and `RESPELL` for yours. (The assistant speaks Spanish by default — the persona prompt is where you change that.)
 
-## Estructura
+## Structure
 
-| Archivo | Qué es |
+| File | What it is |
 |---|---|
-| `jarvis_cli.py` | El cerebro: loop sobre `claude -p`, contexto del vault, streaming, memoria de sesión |
-| `jarvis_voz.py` | Oído y voz: Whisper MLX local + edge-tts + persona |
-| `jarvis_ui.py` + `ui.html` | HUD web: Flask + SSE + canvas; wake word, timers, barge-in |
-| `manos.py` | Menú de acciones del sistema (apps, Spotify, volumen, capturas) |
-| `timer.py` | Timers hablados |
-| `jarvis.py` | Versión SDK (`anthropic`), lista para migrar cuando haya crédito API |
+| `jarvis_cli.py` | The brain: loop over `claude -p`, vault context, streaming, session memory |
+| `jarvis_voz.py` | Ears and voice: local Whisper MLX + edge-tts + persona |
+| `jarvis_ui.py` + `ui.html` | Web HUD: Flask + SSE + canvas; wake word, timers, barge-in |
+| `manos.py` | System actions menu (apps, Spotify, volume, captures) |
+| `timer.py` | Spoken timers |
+| `jarvis.py` | SDK version (`anthropic`), ready for when API credit lands |
 
 ## Roadmap
 
-- **Router de comandos**: interceptar comandos obvios antes del round-trip del LLM.
-- **Proactividad**: briefing hablado del primer boot del día leyendo los pendientes del vault.
-- **Visión**: snapshot de pantalla/webcam → Claude.
-- **Multi-agent** (fase SDK): investigación en background sin bloquear la conversación.
+- **Command router**: intercept obvious commands before the LLM round-trip.
+- **Proactivity**: spoken briefing on the first boot of the day, reading pending items from the vault.
+- **Vision**: screen/webcam snapshot → Claude.
+- **Multi-agent** (SDK phase): background research without blocking the conversation.
 
 ---
 
-*Proyecto personal de aprendizaje en público — construido con Claude Code como pair programmer.*
+*A personal learning-in-public project — built with Claude Code as pair programmer.*
