@@ -340,10 +340,20 @@ def stream():
         {tipo: "error",   texto}
     """
     entrada = (request.json or {}).get("texto", "").strip()
+    idioma = (request.json or {}).get("idioma", "es")
     if not entrada:
         return jsonify({"error": "vacío"}), 400
     if S["ocupado"]:
         return jsonify({"error": "ocupado, esperá el turno actual"}), 409
+
+    # el toggle de idioma de la UI también manda sobre el cerebro: en modo
+    # inglés responde en inglés SIEMPRE (los subtítulos son su respuesta —
+    # sin esto, contestaba en el idioma que oyera y el demo quedaba mixto)
+    sistema = S["system"]
+    if idioma == "en":
+        sistema += ("\n\n=== LANGUAGE ===\nThe UI is in English mode: reply "
+                    "ONLY in English this turn, no matter the language spoken "
+                    "to you. Same persona, same dry wit.")
 
     def gen():
         S["ocupado"] = True
@@ -351,7 +361,7 @@ def stream():
         pendiente = ""   # texto acumulado aún sin cortar en oraciones
         primera = True   # el primer bocado se corta temprano (ver abajo)
         try:
-            for ev in preguntar_stream(entrada, S["system"], S["session_id"]):
+            for ev in preguntar_stream(entrada, sistema, S["session_id"]):
                 if ev[0] == "delta":
                     pendiente += ev[1]
                     yield _sse({"tipo": "delta", "texto": ev[1]})

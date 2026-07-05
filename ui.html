@@ -378,6 +378,9 @@ async function reproducirCola() {
     const item = cola.shift();
     const datos = await item.p;
     if (!datos || !datos.byteLength) { subPoner(item.texto); continue; }
+    // Safari/Chrome suspenden el AudioContext solos a veces (reporte
+    // 2026-07-05: al 3er turno la voz moría) — revivirlo antes de cada pieza
+    if (actx.state !== "running") { try { await actx.resume(); } catch {} }
     try {
       const buf = await actx.decodeAudioData(datos);
       // recortar los colchones de silencio que edge-tts deja en las puntas
@@ -395,6 +398,9 @@ async function reproducirCola() {
         fuente.connect(analizador);
         fuente.onended = res;
         fuente.start(0, desde, dur);
+        // watchdog: si onended nunca llega (context suspendido a media
+        // pieza), la cola sigue igual — nunca rehén, como los endpoints del mic
+        setTimeout(res, dur * 1000 + 2000);
         subPoner(item.texto);  // subtítulo de película: la oración que suena
         if (alArrancarAudio) { alArrancarAudio(); alArrancarAudio = null; }
       });
@@ -561,7 +567,7 @@ async function turno(texto) {
   try {
     const r = await fetch("/api/stream", { method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ texto }) });
+      body: JSON.stringify({ texto, idioma }) });
     const reader = r.body.getReader();
     const dec = new TextDecoder();
     let buf = "";
