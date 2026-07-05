@@ -186,8 +186,17 @@
     opacity: 0; animation: aparecer .3s forwards; }
   #boot .linea b { color: var(--cyan); font-weight: 400; }
   @keyframes aparecer { to { opacity: 1 } }
+  #bootIdiomas {
+    display: flex; gap: 14px; margin-top: 26px;
+    opacity: 0; animation: aparecer .4s 1.5s forwards;
+  }
+  #bootIdiomas .bi { font-size: 11px; letter-spacing: 3px; padding: 8px 18px; }
+  #bootIdiomas .bi.activo {
+    border-color: rgba(79,216,235,.6); color: var(--cyan);
+    text-shadow: 0 0 8px rgba(79,216,235,.5);
+  }
   #iniciar {
-    margin-top: 30px; padding: 14px 42px; font-size: 13px; letter-spacing: 5px;
+    margin-top: 18px; padding: 14px 42px; font-size: 13px; letter-spacing: 5px;
     border-color: rgba(79,216,235,.4); opacity: 0; animation: aparecer .4s 1.6s forwards;
   }
 </style>
@@ -202,6 +211,10 @@
   <div class="linea" style="animation-delay:.75s">&gt; CEREBRO ........... <b>SONNET · SUSCRIPCIÓN</b></div>
   <div class="linea" style="animation-delay:1.05s">&gt; OÍDOS ............. <b>WHISPER LOCAL</b></div>
   <div class="linea" style="animation-delay:1.35s">&gt; VOZ ............... <b>ANDREW · EDGE-TTS</b></div>
+  <div id="bootIdiomas">
+    <button class="bi" data-l="es">español</button>
+    <button class="bi" data-l="en">english</button>
+  </div>
   <button id="iniciar">iniciar</button>
 </div>
 
@@ -455,12 +468,18 @@ function aplicarIdioma() {
   $("#cerrar").title = t.guardarTitle;
   $("#sysOnline").textContent = t.sysOnline;
   $("#idioma").textContent = idioma;
+  document.querySelectorAll("#bootIdiomas .bi").forEach(b =>
+    b.classList.toggle("activo", b.dataset.l === idioma));
 }
-$("#idioma").onclick = () => {
-  idioma = idioma === "es" ? "en" : "es";
+function ponerIdioma(l) {
+  idioma = l;
   localStorage.setItem("jarvis-idioma", idioma);
   aplicarIdioma();
-};
+}
+$("#idioma").onclick = () => ponerIdioma(idioma === "es" ? "en" : "es");
+// selector del boot: que el gringo elija ANTES de que jarvis hable
+document.querySelectorAll("#bootIdiomas .bi").forEach(b =>
+  b.onclick = () => ponerIdioma(b.dataset.l));
 // (la llamada inicial vive al final del script: necesita manosLibres declarado)
 
 // ── Chat ─────────────────────────────────────────────────────────────────
