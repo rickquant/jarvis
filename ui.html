@@ -282,6 +282,9 @@ const L = {
     sysOnline: "— sistemas en línea —",
     memGuardada: "memoria guardada → ", sesVacia: "sesión vacía, nada que guardar",
     noRespondio: "no respondió", manosLibresErr: "⚠ manos libres: ",
+    panelAudio: "AUDIO // ESPECTRO", panelCerebro: "CEREBRO // TELEMETRÍA",
+    turnosLbl: "TURNOS", latLbl: "LATENCIA / TURNO (s)", sinDatos: "— sin datos aún —",
+    sesionLbl: "SESIÓN", cerebroSub: "SONNET · SUSCRIPCIÓN",
     saludo: h => h < 12 ? "Buenos días" : h < 19 ? "Buenas tardes" : "Buenas noches",
     corto: s => `${s}, Charles. Sistemas en línea.`,
     intro: s => [`${s}, Charles.`,
@@ -311,6 +314,9 @@ const L = {
     sysOnline: "— systems online —",
     memGuardada: "memory saved → ", sesVacia: "empty session, nothing to save",
     noRespondio: "didn't respond", manosLibresErr: "⚠ hands-free: ",
+    panelAudio: "AUDIO // SPECTRUM", panelCerebro: "BRAIN // TELEMETRY",
+    turnosLbl: "TURNS", latLbl: "LATENCY / TURN (s)", sinDatos: "— no data yet —",
+    sesionLbl: "SESSION", cerebroSub: "SONNET · SUBSCRIPTION",
     saludo: h => h < 12 ? "Good morning" : h < 19 ? "Good afternoon" : "Good evening",
     corto: s => `${s}, Charles. Systems online.`,
     intro: s => [`${s}, Charles.`,
@@ -467,6 +473,7 @@ function aplicarIdioma() {
   $("#cerrar").textContent = t.guardar;
   $("#cerrar").title = t.guardarTitle;
   $("#sysOnline").textContent = t.sysOnline;
+  $("#fase").textContent = t.fases[faseActual()] || t.fases.listo;
   $("#idioma").textContent = idioma;
   document.querySelectorAll("#bootIdiomas .bi").forEach(b =>
     b.classList.toggle("activo", b.dataset.l === idioma));
@@ -909,7 +916,7 @@ function dibujarPaneles(t) {
   const fase = faseActual();
 
   // ── izquierda: espectro / actividad de audio ──
-  marcoPanel(pzCtx, PZW, PZH, "AUDIO // ESPECTRO");
+  marcoPanel(pzCtx, PZW, PZH, T().panelAudio);
   const nB = 14, bw = (PZW - 40) / nB;
   for (let i = 0; i < nB; i++) {
     let v;  // 0..1 por barra, según qué esté sonando de verdad
@@ -924,14 +931,14 @@ function dibujarPaneles(t) {
   pzCtx.fillText(sonando ? "TTS · ANDREW" : fase === "escuchando" ? "MIC · WHISPER" : "IDLE", 10, PZH - 14);
 
   // ── derecha: telemetría del cerebro ──
-  marcoPanel(pdCtx, PDW, PDH, "CEREBRO // TELEMETRÍA");
+  marcoPanel(pdCtx, PDW, PDH, T().panelCerebro);
   pdCtx.font = "26px 'Share Tech Mono', monospace";
   pdCtx.fillStyle = "rgba(79,216,235,.85)";
   pdCtx.fillText(String(turnos).padStart(2, "0"), 10, 52);
   pdCtx.font = "8px 'Share Tech Mono', monospace";
   pdCtx.fillStyle = "rgba(79,216,235,.5)";
-  pdCtx.fillText("TURNOS", 10, 64);
-  pdCtx.fillText("LATENCIA / TURNO (s)", 10, 96);
+  pdCtx.fillText(T().turnosLbl, 10, 64);
+  pdCtx.fillText(T().latLbl, 10, 96);
   // sparkline de latencias reales
   if (latencias.length > 1) {
     const max = Math.max(...latencias, 3);
@@ -944,7 +951,7 @@ function dibujarPaneles(t) {
     });
     pdCtx.stroke();
   } else {
-    pdCtx.fillText("— sin datos aún —", 10, 140);
+    pdCtx.fillText(T().sinDatos, 10, 140);
   }
   // anillo de sesión (minutos, gira mientras corre)
   const min = (Date.now() - inicio) / 60000;
@@ -955,9 +962,9 @@ function dibujarPaneles(t) {
   pdCtx.arc(PDW / 2, PDH - 70, 26, -Math.PI / 2, -Math.PI / 2 + (min % 60) / 60 * 2 * Math.PI);
   pdCtx.stroke();
   pdCtx.textAlign = "center";
-  pdCtx.fillText("SESIÓN", PDW / 2, PDH - 66);
+  pdCtx.fillText(T().sesionLbl, PDW / 2, PDH - 66);
   pdCtx.textAlign = "left";
-  pdCtx.fillText("SONNET · SUSCRIPCIÓN", 10, PDH - 14);
+  pdCtx.fillText(T().cerebroSub, 10, PDH - 14);
 }
 
 // ── Loop de render ───────────────────────────────────────────────────────
@@ -1001,6 +1008,13 @@ if (location.search.includes("sin-boot")) $("#boot").classList.add("fuera");
 
 // idioma guardado: se aplica al final, cuando todo lo que toca ya existe
 aplicarIdioma();
+
+// deep-links: ?idioma=en fuerza el idioma (para compartir el demo en inglés);
+// ?auto-inicio pulsa «iniciar» solo (testing headless — el audio necesita
+// autoplay sin gesto, en un browser normal quedaría mudo)
+const qs = new URLSearchParams(location.search);
+if (L[qs.get("idioma")]) ponerIdioma(qs.get("idioma"));
+if (qs.has("auto-inicio")) $("#iniciar").click();
 </script>
 </body>
 </html>
