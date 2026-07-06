@@ -91,6 +91,40 @@
   }
   #pista { font-size: 11px; letter-spacing: 1.5px; color: var(--cyan-dim); }
 
+  /* paneles situacionales: tarjetas que Jarvis materializa cuando hay algo
+     que MOSTRAR (clima, web, vault, agenda) — regla de las películas: la
+     información aparece cuando se necesita y se va sola. Animación de
+     materialización: swoop + revelado por scanline + micro-glitch. */
+  #panelesSit { position: fixed; left: 18px; top: 64px; width: 254px; z-index: 5;
+    display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
+  body:not(.hud) #panelesSit { display: none; }
+  .psit { pointer-events: auto; cursor: pointer; position: relative;
+    background: rgba(6,22,28,.78); border: 1px solid rgba(79,216,235,.28);
+    padding: 9px 12px 8px; font: 11px 'Share Tech Mono', monospace;
+    overflow: hidden; animation: psitIn .38s cubic-bezier(.2,.9,.25,1) both; }
+  .psit::before { content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: linear-gradient(180deg, transparent, rgba(155,232,242,.30), transparent);
+    transform: translateY(-100%); animation: psitScan .5s ease-out .05s 1; }
+  .psit::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(0deg, rgba(0,0,0,.15) 0 1px, transparent 1px 3px); }
+  .psitT { color: rgba(79,216,235,.62); font-size: 8px; letter-spacing: 2.5px;
+    margin-bottom: 5px; }
+  .psitL { color: #bfeef5; white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis; line-height: 1.55; }
+  .psit.fuera { animation: psitOut .3s ease-in both; }
+  @keyframes psitIn {
+    0%   { opacity: 0; transform: translateY(-8px) scale(1.06); clip-path: inset(0 0 100% 0); }
+    55%  { opacity: 1; clip-path: inset(0 0 0 0); }
+    62%  { transform: translateX(2px); }
+    70%  { transform: translateX(-2px); }
+    100% { opacity: 1; transform: none; clip-path: inset(0 0 0 0); }
+  }
+  @keyframes psitScan { to { transform: translateY(100%); } }
+  @keyframes psitOut {
+    to { opacity: 0; transform: translateY(-6px) scale(.97); clip-path: inset(0 0 100% 0); }
+  }
+  @media (max-width: 860px) { #panelesSit { display: none; } }
+
   /* timers activos: countdown en vivo bajo el reactor */
   #timers { display: flex; gap: 10px; min-height: 24px; flex-wrap: wrap;
     justify-content: center; }
@@ -204,6 +238,7 @@
 <body>
 
 <canvas id="particulas"></canvas>
+<div id="panelesSit"></div>
 
 <div id="boot">
   <div class="linea" style="animation-delay:.15s">&gt; NÚCLEO ............ <b>EN LÍNEA</b></div>
@@ -273,6 +308,7 @@ const L = {
     manos: { Bash: "ejecutando acción…", Read: "leyendo el vault…",
              Grep: "buscando en el vault…", Glob: "buscando en el vault…",
              WebSearch: "buscando en la web…", WebFetch: "leyendo la web…" },
+    panelTipos: { clima: "CLIMA", agenda: "HOY", vault: "VAULT", web: "WEB" },
     boot: [["NÚCLEO", "EN LÍNEA"], ["MEMORIA", "VAULT MONTADO"], ["CEREBRO", "SONNET · SUSCRIPCIÓN"],
            ["OÍDOS", OIDOS_APPLE ? "APPLE · NEURAL ENGINE" : "WHISPER LOCAL"], ["VOZ", "ANDREW · EDGE-TTS"]],
     iniciar: "iniciar", tele: ["hora", "sesión", "turnos", "latencia", "clima"],
@@ -304,6 +340,7 @@ const L = {
   en: {
     fases: { listo: "online", escuchando: "listening…", transcribiendo: "transcribing…",
              pensando: "processing…", hablando: "speaking" },
+    panelTipos: { clima: "WEATHER", agenda: "TODAY", vault: "VAULT", web: "WEB" },
     manos: { Bash: "running an action…", Read: "reading the vault…",
              Grep: "searching the vault…", Glob: "searching the vault…",
              WebSearch: "searching the web…", WebFetch: "reading the web…" },
@@ -709,6 +746,39 @@ $("#cerrar").onclick = async () => {
   } finally { ocupado = false; }
 };
 
+// ── Paneles situacionales ────────────────────────────────────────────────
+// El server decide QUÉ mostrar (datos deterministas: clima, tool use del
+// cerebro, briefing); acá solo se materializan y despiden. Click = cerrar.
+const sitVivos = new Map();     // id → nodo en pantalla
+const sitCerrados = new Set();  // ids cerrados a mano: no resucitan
+function pintarPaneles(lista) {
+  lista = lista || [];
+  const esc2 = s => s.replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+  const ids = new Set(lista.map(p => p.id));
+  for (const [id, nodo] of sitVivos) {
+    if (!ids.has(id)) {
+      sitVivos.delete(id);
+      nodo.classList.add("fuera");
+      setTimeout(() => nodo.remove(), 320);
+    }
+  }
+  for (const p of lista) {
+    if (sitVivos.has(p.id) || sitCerrados.has(p.id)) continue;
+    const nodo = document.createElement("div");
+    nodo.className = "psit";
+    nodo.innerHTML = `<div class="psitT">◈ ${esc2(T().panelTipos[p.tipo] || p.tipo.toUpperCase())}</div>` +
+      p.lineas.map(l => `<div class="psitL">${esc2(l)}</div>`).join("");
+    nodo.onclick = () => {
+      sitCerrados.add(p.id); sitVivos.delete(p.id);
+      nodo.classList.add("fuera");
+      setTimeout(() => nodo.remove(), 320);
+    };
+    $("#panelesSit").appendChild(nodo);
+    sitVivos.set(p.id, nodo);
+    try { bip(1567, 0.05); } catch {}   // "dato en pantalla"
+  }
+}
+
 // ── Estado + telemetría ──────────────────────────────────────────────────
 let manosLibres = false, faseAnterior = "listo", ultimoResync = 0;
 setInterval(async () => {
@@ -719,7 +789,7 @@ setInterval(async () => {
     const e = await api("estado?idioma=" + idioma +
                         (sonando ? "&hablando=1" : ""));
     nivelMic = e.nivel || 0;
-    if (e.clima) $("#tClima").textContent = e.clima;  // lo trae el briefing
+    if (e.clima) $("#tClima").textContent = e.clima;  // refrescado cada 45 min
     if (e.manos_error) msg("sys", T().manosLibresErr + e.manos_error);
 
     // aviso de timer vencido: bip de atención + jarvis lo dice por voz
@@ -735,6 +805,9 @@ setInterval(async () => {
       `<div class="timer">⏱ ${String(Math.floor(t.resta / 60)).padStart(2, "0")}:` +
       `${String(t.resta % 60).padStart(2, "0")}` +
       `${t.etiqueta ? " · " + esc(t.etiqueta) : ""}</div>`).join("");
+
+    // paneles situacionales: lo que jarvis quiere MOSTRAR ahora mismo
+    pintarPaneles(e.paneles);
 
     // resync: este tab cree que manos libres está on pero el servidor dice
     // off (server reiniciado, oído muerto) → re-encenderlo, no morir mudo

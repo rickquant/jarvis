@@ -159,11 +159,15 @@ def preguntar_stream(prompt: str, system: str, session_id: str | None):
     """Como preguntar(), pero streaming: cede eventos a medida que llegan.
 
     Generador de tuplas:
-        ("delta", texto)              — fragmento de la respuesta
+        ("delta", texto)               — fragmento de la respuesta
+        ("mano", nombre)               — empezó a usar una herramienta (en vivo)
+        ("mano_uso", nombre, input)    — tool_use completo, con su input (dict)
+        ("mano_result", nombre, texto) — resultado de la herramienta (texto crudo)
         ("fin", respuesta, session_id) — turno completo (siempre el último)
 
-    Mismo transporte (`claude -p`, suscripción); solo cambia el formato de
-    salida a stream-json para no esperar el turno completo en silencio.
+    Los eventos mano_uso/mano_result alimentan los paneles situacionales del
+    HUD (qué nota lee, qué encontró en la web) — datos que ya viajan por el
+    stream, cero round-trips extra. Mismo transporte (`claude -p`).
     """
     cmd = [
         "claude", "-p", prompt,
@@ -185,6 +189,7 @@ def preguntar_stream(prompt: str, system: str, session_id: str | None):
     partes: list[str] = []
     final: str | None = None
     sid = session_id
+    manos_uso: dict[str, str] = {}  # tool_use_id → nombre (para casar resultados)
     try:
         for linea in proc.stdout:
             linea = linea.strip()
@@ -205,6 +210,30 @@ def preguntar_stream(prompt: str, system: str, session_id: str | None):
                         and evento.get("content_block", {}).get("type") == "tool_use"):
                     # está usando una mano: el HUD lo muestra en vivo
                     yield ("mano", evento["content_block"].get("name", ""))
+            elif ev.get("type") == "assistant":
+                # mensaje completo del turno: acá el tool_use viene con su
+                # input entero (en el stream_event el input gotea en deltas)
+                for bloque in ev.get("message", {}).get("content", []) or []:
+                    if isinstance(bloque, dict) and bloque.get("type") == "tool_use":
+                        manos_uso[bloque.get("id", "")] = bloque.get("name", "")
+                        yield ("mano_uso", bloque.get("name", ""),
+                               bloque.get("input") or {})
+            elif ev.get("type") == "user":
+                # resultado de la herramienta: viaja como mensaje user con
+                # tool_result — se casa con su tool_use por id
+                for bloque in ev.get("message", {}).get("content", []) or []:
+                    if not (isinstance(bloque, dict)
+                            and bloque.get("type") == "tool_result"):
+                        continue
+                    contenido = bloque.get("content")
+                    if isinstance(contenido, list):
+                        texto = "\n".join(c.get("text", "") for c in contenido
+                                          if isinstance(c, dict))
+                    else:
+                        texto = str(contenido or "")
+                    nombre = manos_uso.get(bloque.get("tool_use_id", ""), "")
+                    if nombre and texto:
+                        yield ("mano_result", nombre, texto)
             elif ev.get("type") == "result":
                 if ev.get("is_error"):
                     raise RuntimeError(ev.get("result", "error desconocido del CLI"))

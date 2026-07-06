@@ -35,7 +35,7 @@ import numpy as np
 import sounddevice as sd
 from flask import Flask, Response, jsonify, request, send_file
 
-from briefing import PROMPT_BRIEFING, datos_briefing
+from briefing import PROMPT_BRIEFING, _clima, datos_briefing
 from jarvis_cli import (VAULT, cargar_contexto, escribir_memoria,
                         preguntar_stream)
 from jarvis_voz import (PERSONA, RESPELL, SAMPLE_RATE, VOZ, VOZ_RATE, YAP,
@@ -59,7 +59,9 @@ S = {
     "avisos": [],           # timers vencidos etc. — el browser los recoge y los dice
     "timers": [],           # timers activos {fin, etiqueta} — el HUD los muestra en vivo
     "idioma": "es",         # idioma de la UI — el oído transcribe en este idioma
-    "clima": None,          # lo trae el briefing; el HUD lo muestra en telemetría
+    "clima": None,          # refrescado cada 45 min (antes solo en el briefing)
+    "paneles": [],          # tarjetas situacionales del HUD {id,tipo,lineas,ts,ttl}
+    "paneles_seq": 0,
     "lock": threading.Lock(),
 }
 _rec = {"stream": None, "frames": []}
@@ -79,6 +81,70 @@ _PRIMER_BOCADO = re.compile(
 
 def _sse(datos: dict) -> str:
     return f"data: {json.dumps(datos, ensure_ascii=False)}\n\n"
+
+
+# ── Paneles situacionales del HUD ─────────────────────────────────────────
+#
+# Regla de las películas (ver Investigacion-HUD-Paneles-Situacionales en el
+# vault): la información aparece cuando se la necesita y se va sola. Los
+# datos son deterministas — ya pasan por el server (clima, tool_use del
+# stream, briefing): cero tokens extra, el LLM ni se entera. Un panel por
+# tipo (el nuevo reemplaza al viejo, como en el cine); viajan por el poll
+# de /api/estado y el browser los materializa con scanlines.
+
+def panel(tipo: str, lineas: list[str], ttl: int = 30) -> None:
+    lineas = [l.strip()[:64] for l in lineas if l and l.strip()][:6]
+    if not lineas:
+        return
+    with S["lock"]:
+        S["paneles_seq"] += 1
+        S["paneles"] = [p for p in S["paneles"] if p["tipo"] != tipo]
+        S["paneles"].append({"id": S["paneles_seq"], "tipo": tipo,
+                             "lineas": lineas, "ts": time.time(), "ttl": ttl})
+
+
+def _paneles_vivos() -> list[dict]:
+    ahora = time.time()
+    with S["lock"]:
+        S["paneles"] = [p for p in S["paneles"] if ahora - p["ts"] < p["ttl"]]
+        return [{"id": p["id"], "tipo": p["tipo"], "lineas": p["lineas"]}
+                for p in S["paneles"]]
+
+
+_CLIMA_PREGUNTA = re.compile(
+    r"\b(clima|tiempo|temperatura|lluvia|llover|lloviendo|calor|fr[íi]o|"
+    r"weather|temperature|rain|raining|forecast)\b", re.I)
+
+
+def _clima_loop() -> None:
+    """El clima del HUD ya no depende del briefing: se refresca cada 45 min
+    desde el arranque (fail-silent: sin red, se queda con el último)."""
+    while True:
+        c = _clima(S["idioma"])
+        if c:
+            S["clima"] = c
+        time.sleep(45 * 60)
+
+
+def _panel_web(nombre: str, texto: str) -> None:
+    """Resultado de WebSearch/WebFetch → panel con títulos o dominio."""
+    if nombre == "WebSearch":
+        titulos = re.findall(r'"title"\s*:\s*"([^"]{4,70})"', texto)[:4]
+        if titulos:
+            panel("web", titulos)
+            return
+    # WebFetch (o WebSearch sin links parseables): dominio + primera línea
+    dominio = re.search(r"https?://([^/\s\"]+)", texto)
+    primera = next((l for l in texto.splitlines() if l.strip()), "")
+    panel("web", [dominio.group(1) if dominio else "", primera])
+
+
+def _panel_vault(nombre: str, input_: dict) -> None:
+    """Qué está leyendo/buscando en el vault → panel al instante."""
+    if nombre == "Read" and input_.get("file_path"):
+        panel("vault", [Path(input_["file_path"]).name])
+    elif nombre in ("Grep", "Glob") and input_.get("pattern"):
+        panel("vault", [f"» {input_['pattern']}"])
 
 
 # ── Manos libres: "hey jarvis" (openWakeWord) + fin de habla (VAD) ────────
@@ -226,7 +292,8 @@ def estado():
     return jsonify({"fase": S["fase"], "nivel": round(S["nivel"], 4),
                     "manos": S["manos_libres"], "manos_error": err,
                     "pendiente": S["pendiente"] is not None, "aviso": aviso,
-                    "timers": timers, "clima": S["clima"]})
+                    "timers": timers, "clima": S["clima"],
+                    "paneles": _paneles_vivos()})
 
 
 @app.post("/api/manos_libres")
@@ -362,8 +429,17 @@ def stream():
         datos, clima = datos_briefing(VAULT, idioma)
         if clima:
             S["clima"] = clima  # de paso, al HUD (barra de telemetría)
+            panel("clima", [clima], ttl=90)
+        # tarjeta de agenda: los mismos datos del briefing, sin la sección de
+        # clima (tiene tarjeta propia) — viven lo que dura el briefing hablado
+        panel("agenda", [l for l in datos.splitlines()
+                         if l.strip() and not l.lower().startswith(("clima", "weather"))],
+              ttl=90)
         entrada = PROMPT_BRIEFING.get(idioma, PROMPT_BRIEFING["es"]) \
             .format(datos=datos)
+    elif entrada and _CLIMA_PREGUNTA.search(entrada) and S["clima"]:
+        # preguntó por el clima: la tarjeta se materializa mientras responde
+        panel("clima", [S["clima"]])
     if not entrada:
         return jsonify({"error": "vacío"}), 400
     if S["ocupado"]:
@@ -409,6 +485,11 @@ def stream():
                         primera = False
                 elif ev[0] == "mano":
                     yield _sse({"tipo": "mano", "texto": ev[1]})
+                elif ev[0] == "mano_uso":
+                    _panel_vault(ev[1], ev[2])   # qué nota lee / qué busca
+                elif ev[0] == "mano_result":
+                    if ev[1] in ("WebSearch", "WebFetch"):
+                        _panel_web(ev[1], ev[2])  # títulos / dominio hallados
                 else:  # ("fin", respuesta, session_id)
                     _, respuesta, S["session_id"] = ev
                     if pendiente.strip():
@@ -518,6 +599,8 @@ def main() -> None:
         target=lambda: transcribir(np.zeros(SAMPLE_RATE, dtype=np.float32)),
         daemon=True,
     ).start()
+    # clima siempre fresco en el HUD (antes solo lo traía el briefing del día)
+    threading.Thread(target=_clima_loop, daemon=True).start()
 
     url = "http://localhost:7777"
     extra = f" + {ruta}" if ruta else ""
