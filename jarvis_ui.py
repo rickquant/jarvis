@@ -457,11 +457,17 @@ def timer():
     if not 0 < minutos <= 24 * 60:
         return jsonify({"error": "minutos fuera de rango (0 a 1440)"}), 400
     etiqueta = str(d.get("etiqueta") or "").strip()
-    texto = (f"Charles, terminó el timer de {etiqueta}." if etiqueta
-             else f"Charles, terminó tu timer de {minutos:g} minutos.")
     registro = {"fin": time.time() + minutos * 60, "etiqueta": etiqueta}
 
     def avisar():
+        # el texto se compone AL VENCER, en el idioma que la UI tenga en ese
+        # momento — un timer puesto en español puede vencer en modo inglés
+        if S["idioma"] == "en":
+            texto = (f"Charles, your {etiqueta} timer is done." if etiqueta
+                     else f"Charles, your {minutos:g} minute timer is done.")
+        else:
+            texto = (f"Charles, terminó el timer de {etiqueta}." if etiqueta
+                     else f"Charles, terminó tu timer de {minutos:g} minutos.")
         with S["lock"]:
             S["avisos"].append(texto)
             if registro in S["timers"]:
@@ -484,8 +490,11 @@ def salir():
     try:
         nota = escribir_memoria(S["system"], S["session_id"])
         S["session_id"] = None
+        despedida = ("Session memory saved to the vault, Charles."
+                     if S["idioma"] == "en" else
+                     "Memoria de sesión guardada en el vault, Charles.")
         return jsonify({"nota": str(nota.relative_to(VAULT)),
-                        "despedida": "Memoria de sesión guardada en el vault, Charles."})
+                        "despedida": despedida})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     finally:

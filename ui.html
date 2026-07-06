@@ -759,7 +759,10 @@ setInterval(() => {
 
 // ── Reactor (canvas) ─────────────────────────────────────────────────────
 const lienzo = $("#reactor"), ctx = lienzo.getContext("2d");
-const DPR = window.devicePixelRatio || 1;
+// tope 1.5: en retina (2x) el canvas costaba 4x píxeles por frame y el HUD
+// laggeaba compitiendo con Whisper + el oído; a 1.5 el brillo/las líneas se
+// ven igual y son ~44% menos píxeles (fix de lag, 2026-07-05)
+const DPR = Math.min(window.devicePixelRatio || 1, 1.5);
 lienzo.width = 330 * DPR; lienzo.height = 330 * DPR;
 ctx.scale(DPR, DPR);
 const CX = 165, CY = 165;
