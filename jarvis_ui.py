@@ -35,6 +35,7 @@ import numpy as np
 import sounddevice as sd
 from flask import Flask, Response, jsonify, request, send_file
 
+from briefing import PROMPT_BRIEFING, datos_briefing
 from jarvis_cli import (VAULT, cargar_contexto, escribir_memoria,
                         preguntar_stream)
 from jarvis_voz import (PERSONA, RESPELL, SAMPLE_RATE, VOZ, VOZ_RATE,
@@ -345,9 +346,15 @@ def stream():
         {tipo: "fin",     texto}  — respuesta completa
         {tipo: "error",   texto}
     """
-    entrada = (request.json or {}).get("texto", "").strip()
-    idioma = (request.json or {}).get("idioma", "es")
+    d = request.json or {}
+    entrada = d.get("texto", "").strip()
+    idioma = d.get("idioma", "es")
     S["idioma"] = idioma  # el oído también transcribe en este idioma
+    if d.get("briefing"):
+        # briefing proactivo del primer boot del día: la recolección de
+        # datos es determinística (briefing.py) y el cerebro solo narra —
+        # un único round-trip. Mientras se junta, la intro sigue sonando.
+        entrada = PROMPT_BRIEFING.format(datos=datos_briefing(VAULT, idioma))
     if not entrada:
         return jsonify({"error": "vacío"}), 400
     if S["ocupado"]:

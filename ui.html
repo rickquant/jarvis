@@ -545,10 +545,14 @@ async function api(ruta, body, ms = 15000) {
 }
 
 // ── Un turno, en streaming ───────────────────────────────────────────────
-async function turno(texto) {
+// briefing=true: turno proactivo (primer boot del día) — no hay palabras
+// del usuario que mostrar y el server arma el prompt solo
+async function turno(texto, briefing = false) {
   ocupado = true;
-  msg("vos", texto);
-  subPoner("» " + texto, true);  // en HUD: tus palabras, hasta que jarvis hable
+  if (!briefing) {
+    msg("vos", texto);
+    subPoner("» " + texto, true);  // en HUD: tus palabras, hasta que jarvis hable
+  }
   const burbuja = msgStreaming();
   const t0 = performance.now();
   let primera = true;
@@ -567,7 +571,8 @@ async function turno(texto) {
   try {
     const r = await fetch("/api/stream", { method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ texto, idioma }) });
+      body: JSON.stringify(briefing ? { briefing: true, idioma }
+                                    : { texto, idioma }) });
     const reader = r.body.getReader();
     const dec = new TextDecoder();
     let buf = "";
@@ -1003,9 +1008,15 @@ $("#iniciar").onclick = () => {
   // intro estilo película (Iron Man 3 Second Screen) solo en el primer boot
   // del día; los demás boots usan el saludo corto para no cansar
   const hoy = new Date().toDateString();
-  if (localStorage.getItem("jarvis-intro") !== hoy) {
+  // ?briefing fuerza el briefing aunque no sea el primer boot (demo/testing)
+  const primerBoot = localStorage.getItem("jarvis-intro") !== hoy ||
+                     location.search.includes("briefing");
+  if (primerBoot) {
     localStorage.setItem("jarvis-intro", hoy);
     T().intro(saludo).forEach(decir);
+    // briefing proactivo: se pide ya, y sus oraciones entran a la misma
+    // cola de TTS — arranca a hablar justo cuando la intro termina
+    turno("", true);
   } else {
     decir(T().corto(saludo));
   }
