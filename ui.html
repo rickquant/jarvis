@@ -225,6 +225,7 @@
     <div class="dato"><div class="k">sesión</div><div class="v" id="tSesion">00:00</div></div>
     <div class="dato"><div class="k">turnos</div><div class="v" id="tTurnos">0</div></div>
     <div class="dato"><div class="k">latencia</div><div class="v" id="tLat">—</div></div>
+    <div class="dato"><div class="k">clima</div><div class="v" id="tClima">—</div></div>
     <button id="modo" title="alternar entre modo HUD (subtítulos) y modo consola (chat completo)">modo · hud</button>
     <button id="voz" title="manos libres: decí «hey jarvis» y hablá — sin clicks">voz · click</button>
     <button id="idioma" title="español / english">es</button>
@@ -270,7 +271,7 @@ const L = {
              WebSearch: "buscando en la web…", WebFetch: "leyendo la web…" },
     boot: [["NÚCLEO", "EN LÍNEA"], ["MEMORIA", "VAULT MONTADO"], ["CEREBRO", "SONNET · SUSCRIPCIÓN"],
            ["OÍDOS", "WHISPER LOCAL"], ["VOZ", "ANDREW · EDGE-TTS"]],
-    iniciar: "iniciar", tele: ["hora", "sesión", "turnos", "latencia"],
+    iniciar: "iniciar", tele: ["hora", "sesión", "turnos", "latencia", "clima"],
     modo: m => "modo · " + m,
     modoTitle: "alternar entre modo HUD (subtítulos) y modo consola (chat completo)",
     voz: libre => "voz · " + (libre ? "hey jarvis" : "click"),
@@ -303,7 +304,7 @@ const L = {
              WebSearch: "searching the web…", WebFetch: "reading the web…" },
     boot: [["CORE", "ONLINE"], ["MEMORY", "VAULT MOUNTED"], ["BRAIN", "SONNET · SUBSCRIPTION"],
            ["EARS", "LOCAL WHISPER"], ["VOICE", "ANDREW · EDGE-TTS"]],
-    iniciar: "start", tele: ["time", "session", "turns", "latency"],
+    iniciar: "start", tele: ["time", "session", "turns", "latency", "weather"],
     modo: m => "mode · " + (m === "consola" ? "console" : m),
     modoTitle: "toggle between HUD mode (subtitles) and console mode (full chat)",
     voz: libre => "voice · " + (libre ? "hey jarvis" : "click"),
@@ -684,6 +685,7 @@ setInterval(async () => {
     const e = await api("estado?idioma=" + idioma +
                         (sonando ? "&hablando=1" : ""));
     nivelMic = e.nivel || 0;
+    if (e.clima) $("#tClima").textContent = e.clima;  // lo trae el briefing
     if (e.manos_error) msg("sys", T().manosLibresErr + e.manos_error);
 
     // aviso de timer vencido: bip de atención + jarvis lo dice por voz

@@ -138,22 +138,25 @@ def _canvas() -> str | None:
         sys.path.remove(str(repo))
 
 
-def datos_briefing(vault: Path, idioma: str = "es") -> str:
-    """Junta todo el contexto del día en un bloque para el cerebro."""
+def datos_briefing(vault: Path, idioma: str = "es") -> tuple[str, str | None]:
+    """Junta todo el contexto del día en un bloque para el cerebro.
+    Devuelve (datos, clima) — el clima va aparte porque el HUD también
+    lo muestra en la barra de telemetría."""
     a = datetime.now()
+    clima = _clima(idioma)
     secciones = [("fecha y hora", f"{DIAS[a.weekday()]} {a.day} de "
                                   f"{MESES[a.month - 1]} de {a.year}, {a:%H:%M}"),
-                 (f"clima en {CIUDAD}", _clima(idioma)),
+                 (f"clima en {CIUDAD}", clima),
                  ("entregas de la U (Canvas)", _canvas()),
                  ("capturas recientes por voz", _capturas(vault)),
                  ("notas sin procesar en el Inbox", _inbox(vault)),
                  ("proyectos: dónde quedamos", _proximos_pasos(vault))]
-    return "\n\n".join(f"· {titulo}:\n{cuerpo}"
-                       for titulo, cuerpo in secciones if cuerpo)
+    return ("\n\n".join(f"· {titulo}:\n{cuerpo}"
+                        for titulo, cuerpo in secciones if cuerpo), clima)
 
 
 if __name__ == "__main__":
     # prueba directa: python3 briefing.py [ruta-al-vault]
     vault = Path(sys.argv[1]) if len(sys.argv) > 1 else \
         Path(__file__).resolve().parents[3]
-    print(PROMPT_BRIEFING.format(datos=datos_briefing(vault)))
+    print(PROMPT_BRIEFING.format(datos=datos_briefing(vault)[0]))

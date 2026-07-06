@@ -59,6 +59,7 @@ S = {
     "avisos": [],           # timers vencidos etc. — el browser los recoge y los dice
     "timers": [],           # timers activos {fin, etiqueta} — el HUD los muestra en vivo
     "idioma": "es",         # idioma de la UI — el oído transcribe en este idioma
+    "clima": None,          # lo trae el briefing; el HUD lo muestra en telemetría
     "lock": threading.Lock(),
 }
 _rec = {"stream": None, "frames": []}
@@ -221,7 +222,7 @@ def estado():
     return jsonify({"fase": S["fase"], "nivel": round(S["nivel"], 4),
                     "manos": S["manos_libres"], "manos_error": err,
                     "pendiente": S["pendiente"] is not None, "aviso": aviso,
-                    "timers": timers})
+                    "timers": timers, "clima": S["clima"]})
 
 
 @app.post("/api/manos_libres")
@@ -354,7 +355,10 @@ def stream():
         # briefing proactivo del primer boot del día: la recolección de
         # datos es determinística (briefing.py) y el cerebro solo narra —
         # un único round-trip. Mientras se junta, la intro sigue sonando.
-        entrada = PROMPT_BRIEFING.format(datos=datos_briefing(VAULT, idioma))
+        datos, clima = datos_briefing(VAULT, idioma)
+        if clima:
+            S["clima"] = clima  # de paso, al HUD (barra de telemetría)
+        entrada = PROMPT_BRIEFING.format(datos=datos)
     if not entrada:
         return jsonify({"error": "vacío"}), 400
     if S["ocupado"]:
