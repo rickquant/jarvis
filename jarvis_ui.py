@@ -358,7 +358,8 @@ def stream():
         datos, clima = datos_briefing(VAULT, idioma)
         if clima:
             S["clima"] = clima  # de paso, al HUD (barra de telemetría)
-        entrada = PROMPT_BRIEFING.format(datos=datos)
+        entrada = PROMPT_BRIEFING.get(idioma, PROMPT_BRIEFING["es"]) \
+            .format(datos=datos)
     if not entrada:
         return jsonify({"error": "vacío"}), 400
     if S["ocupado"]:

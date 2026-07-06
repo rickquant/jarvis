@@ -24,16 +24,36 @@ from manos import DIAS, MESES
 
 CIUDAD = "Tegucigalpa"
 
-PROMPT_BRIEFING = (
-    "Es el primer arranque del día y la intro de boot ya sonó — NO saludes "
-    "de nuevo ni te presentes: arrancá directo con el briefing del día, "
-    "como J.A.R.V.I.S. se lo daría a Tony. Breve (6-10 oraciones), al "
-    "grano, con tu ingenio seco. Orden sugerido: clima en una frase → "
-    "entregas o urgencias → pendientes que valgan la pena mencionar → "
-    "próximo paso sugerido del proyecto activo. No listes todo: elegí lo "
-    "que importa HOY y descartá el resto. Nada de markdown ni viñetas: "
-    "esto se dice en voz alta.\n\n=== DATOS DEL DÍA ===\n{datos}"
-)
+# El prompt entero cambia con el idioma de la UI: la nota per-turn de
+# idioma alcanza para turnos normales (cortos), pero acá el prompt + los
+# datos son un bloque grande en español y la nota quedaba ahogada — en
+# modo EN el briefing salía en español igual. Instrucción en inglés,
+# arriba y explícita = el modelo obedece.
+PROMPT_BRIEFING = {
+    "es": (
+        "Es el primer arranque del día y la intro de boot ya sonó — NO saludes "
+        "de nuevo ni te presentes: arrancá directo con el briefing del día, "
+        "como J.A.R.V.I.S. se lo daría a Tony. Breve (6-10 oraciones), al "
+        "grano, con tu ingenio seco. Orden sugerido: clima en una frase → "
+        "entregas o urgencias → pendientes que valgan la pena mencionar → "
+        "próximo paso sugerido del proyecto activo. No listes todo: elegí lo "
+        "que importa HOY y descartá el resto. Nada de markdown ni viñetas: "
+        "esto se dice en voz alta.\n\n=== DATOS DEL DÍA ===\n{datos}"
+    ),
+    "en": (
+        "Deliver this ENTIRE briefing in English — every single sentence. "
+        "The data below is in Spanish because the vault is in Spanish: "
+        "translate whatever you use, quote nothing verbatim. It's the first "
+        "boot of the day and the boot intro already played — do NOT greet "
+        "again or introduce yourself: go straight into the day's briefing, "
+        "the way J.A.R.V.I.S. would give it to Tony. Brief (6-10 sentences), "
+        "to the point, with your dry wit. Suggested order: weather in one "
+        "sentence → deadlines or urgent items → pending notes worth "
+        "mentioning → suggested next step on the active project. Don't list "
+        "everything: pick what matters TODAY and drop the rest. No markdown, "
+        "no bullets: this is spoken out loud.\n\n=== TODAY'S DATA ===\n{datos}"
+    ),
+}
 
 
 def _clima(idioma: str = "es") -> str | None:
@@ -159,4 +179,4 @@ if __name__ == "__main__":
     # prueba directa: python3 briefing.py [ruta-al-vault]
     vault = Path(sys.argv[1]) if len(sys.argv) > 1 else \
         Path(__file__).resolve().parents[3]
-    print(PROMPT_BRIEFING.format(datos=datos_briefing(vault)[0]))
+    print(PROMPT_BRIEFING["es"].format(datos=datos_briefing(vault)[0]))
