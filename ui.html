@@ -209,7 +209,7 @@
   <div class="linea" style="animation-delay:.15s">&gt; NÚCLEO ............ <b>EN LÍNEA</b></div>
   <div class="linea" style="animation-delay:.45s">&gt; MEMORIA ........... <b>VAULT MONTADO</b></div>
   <div class="linea" style="animation-delay:.75s">&gt; CEREBRO ........... <b>SONNET · SUSCRIPCIÓN</b></div>
-  <div class="linea" style="animation-delay:1.05s">&gt; OÍDOS ............. <b>WHISPER LOCAL</b></div>
+  <div class="linea" style="animation-delay:1.05s">&gt; OÍDOS ............. <b>APPLE · NEURAL ENGINE</b></div>
   <div class="linea" style="animation-delay:1.35s">&gt; VOZ ............... <b>ANDREW · EDGE-TTS</b></div>
   <div id="bootIdiomas">
     <button class="bi" data-l="es">español</button>
@@ -258,6 +258,10 @@
 <script>
 const $ = s => document.querySelector(s);
 const chat = $("#chat");
+// El server inyecta el oído real al servir la página: "apple" (SpeechAnalyzer
+// de macOS vía yap, Neural Engine) o "whisper" (fallback mlx local).
+const OIDOS = "{{OIDOS}}";
+const OIDOS_APPLE = OIDOS === "apple";
 // ── Idioma de la UI (es/en): todos los textos visibles salen de acá ──────
 // Traduce la página, no al cerebro: Jarvis responde en el idioma en que le
 // hablen (la voz Andrew es multilingüe). Los avisos generados por el server
@@ -270,7 +274,7 @@ const L = {
              Grep: "buscando en el vault…", Glob: "buscando en el vault…",
              WebSearch: "buscando en la web…", WebFetch: "leyendo la web…" },
     boot: [["NÚCLEO", "EN LÍNEA"], ["MEMORIA", "VAULT MONTADO"], ["CEREBRO", "SONNET · SUSCRIPCIÓN"],
-           ["OÍDOS", "WHISPER LOCAL"], ["VOZ", "ANDREW · EDGE-TTS"]],
+           ["OÍDOS", OIDOS_APPLE ? "APPLE · NEURAL ENGINE" : "WHISPER LOCAL"], ["VOZ", "ANDREW · EDGE-TTS"]],
     iniciar: "iniciar", tele: ["hora", "sesión", "turnos", "latencia", "clima"],
     modo: m => "modo · " + m,
     modoTitle: "alternar entre modo HUD (subtítulos) y modo consola (chat completo)",
@@ -304,7 +308,7 @@ const L = {
              Grep: "searching the vault…", Glob: "searching the vault…",
              WebSearch: "searching the web…", WebFetch: "reading the web…" },
     boot: [["CORE", "ONLINE"], ["MEMORY", "VAULT MOUNTED"], ["BRAIN", "SONNET · SUBSCRIPTION"],
-           ["EARS", "LOCAL WHISPER"], ["VOICE", "ANDREW · EDGE-TTS"]],
+           ["EARS", OIDOS_APPLE ? "APPLE · NEURAL ENGINE" : "LOCAL WHISPER"], ["VOICE", "ANDREW · EDGE-TTS"]],
     iniciar: "start", tele: ["time", "session", "turns", "latency", "weather"],
     modo: m => "mode · " + (m === "consola" ? "console" : m),
     modoTitle: "toggle between HUD mode (subtitles) and console mode (full chat)",
@@ -672,7 +676,7 @@ $("#reactor").onclick = async () => {
     bip(660, 0.08);                                               // "recibido"
     grabando = false; ocupado = true;
     try {
-      // 90s: la primera transcripción puede pagar la carga de Whisper
+      // 90s: margen para el fallback a Whisper (su primera corrida carga el modelo)
       const r = await api("mic/stop", {}, 90000);
       ocupado = false;
       if (r.error) msg("sys", "⚠ " + r.error);
@@ -977,7 +981,7 @@ function dibujarPaneles(t) {
     pzCtx.fillRect(20 + i * bw, PZH - 40 - bh, bw - 3, bh);
   }
   pzCtx.fillStyle = "rgba(79,216,235,.45)";
-  pzCtx.fillText(sonando ? "TTS · ANDREW" : fase === "escuchando" ? "MIC · WHISPER" : "IDLE", 10, PZH - 14);
+  pzCtx.fillText(sonando ? "TTS · ANDREW" : fase === "escuchando" ? (OIDOS_APPLE ? "MIC · APPLE" : "MIC · WHISPER") : "IDLE", 10, PZH - 14);
 
   // ── derecha: telemetría del cerebro ──
   marcoPanel(pdCtx, PDW, PDH, T().panelCerebro);

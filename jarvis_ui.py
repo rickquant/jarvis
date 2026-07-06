@@ -11,7 +11,7 @@ v2 — tres upgrades sobre la v1, misma arquitectura:
      al browser, que lo reproduce con Web Audio — así el reactor pulsa con
      la onda real de la voz y un click interrumpe a Jarvis (barge-in).
   3. La transcripción del mic se devuelve aparte del turno: ves lo que
-     Whisper entendió al instante, y el turno arranca después.
+     el STT entendió al instante, y el turno arranca después.
 
 Corre local, costo $0.
 
@@ -38,7 +38,7 @@ from flask import Flask, Response, jsonify, request, send_file
 from briefing import PROMPT_BRIEFING, datos_briefing
 from jarvis_cli import (VAULT, cargar_contexto, escribir_memoria,
                         preguntar_stream)
-from jarvis_voz import (PERSONA, RESPELL, SAMPLE_RATE, VOZ, VOZ_RATE,
+from jarvis_voz import (PERSONA, RESPELL, SAMPLE_RATE, VOZ, VOZ_RATE, YAP,
                         _limpiar_para_voz, transcribir)
 
 app = Flask(__name__)
@@ -198,7 +198,11 @@ def _manos_libres_loop() -> None:
 
 @app.get("/")
 def index():
-    return send_file(AQUI / "ui.html")
+    # El HUD muestra el oído REAL: la verdad se decide acá al servir la
+    # página, no hardcodeada en el HTML (si yap falta, cae a Whisper y el
+    # boot lo dice — importa: el repo es público y otros lo van a clonar).
+    html = (AQUI / "ui.html").read_text()
+    return html.replace("{{OIDOS}}", "apple" if YAP.exists() else "whisper")
 
 
 @app.get("/api/estado")
@@ -508,7 +512,8 @@ def main() -> None:
     ruta = sys.argv[1].strip("/") if len(sys.argv) > 1 else None
     S["system"] = cargar_contexto(ruta) + PERSONA
 
-    # Precalentar Whisper para que el primer turno de mic no pague la carga
+    # Precalentar el STT: con yap pre-verifica binario y asset; sin yap
+    # carga el modelo de Whisper para que el primer turno no pague eso
     threading.Thread(
         target=lambda: transcribir(np.zeros(SAMPLE_RATE, dtype=np.float32)),
         daemon=True,
