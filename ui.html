@@ -1017,10 +1017,11 @@ function dibujarPaneles(t) {
 }
 
 // ── Loop de render ───────────────────────────────────────────────────────
-// 30fps, no 60: el canvas compite por el M2 con Whisper y el oído de manos
-// libres, y a 60fps la página se ponía laggy al hablar. A 30 no se nota en
-// una animación ambiental. Durante la transcripción (el pico de CPU) las
-// partículas y los paneles FUI se congelan; solo el reactor sigue vivo.
+// 30fps, no 60: el canvas convive con el oído de manos libres y a 60fps la
+// página se ponía laggy. A 30 no se nota en una animación ambiental.
+// (Hasta 2026-07-06 las partículas y paneles FUI se congelaban durante la
+// transcripción por el pico de CPU de Whisper; con el STT en el Neural
+// Engine vía yap ese pico ya no existe y el HUD queda vivo siempre.)
 let frameAnterior = 0;
 (function render(now = 0) {
   requestAnimationFrame(render);
@@ -1028,10 +1029,8 @@ let frameAnterior = 0;
   frameAnterior = now;
   const t = now / 1000;
   dibujarReactor(t);
-  if (faseActual() !== "transcribiendo") {
-    dibujarParticulas();
-    dibujarPaneles(t);
-  }
+  dibujarParticulas();
+  dibujarPaneles(t);
 })();
 
 // ── Boot: el click desbloquea el audio del browser ───────────────────────

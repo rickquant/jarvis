@@ -2,7 +2,7 @@
 """
 Jarvis — voz. El loop de jarvis_cli.py envuelto en STT + TTS.
 
-    🎤 mic → Whisper local (MLX, M2) → claude -p (suscripción) → edge-tts → 🔊
+    🎤 mic → Apple STT (yap/Neural Engine; fallback Whisper MLX) → claude -p → edge-tts → 🔊
 
 Push-to-talk: Enter para hablar, Enter para terminar de hablar.
 `salir` (dicho o escrito) termina y guarda la memoria al vault.
@@ -17,10 +17,12 @@ Uso:
 
 import asyncio
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
 import threading
+import wave
 from pathlib import Path
 
 import numpy as np
@@ -112,11 +114,44 @@ def grabar() -> np.ndarray:
     return np.concatenate(frames).flatten()
 
 
+# STT primario desde 2026-07-06: SpeechAnalyzer nativo de macOS 26 vía el
+# CLI `yap` (Speech.framework). El modelo lo corre el SISTEMA en el Neural
+# Engine — nuestro proceso no carga nada: en el Air de 8GB eso libera ~1GB
+# de RAM y elimina el pico de CPU que obligaba a congelar el HUD. Ver
+# decisión y benchmarks en el vault (Investigacion-STT 2026-07-06). Bonus
+# medido: ante audio malo devuelve vacío; Whisper alucinaba texto.
+YAP = (Path(p).expanduser() if (p := shutil.which("yap")) else
+       Path("~/.local/bin/yap").expanduser())
+YAP_LOCALE = {"es": "es_MX", "en": "en_US"}
+
+
+def _transcribir_yap(audio: np.ndarray, idioma: str) -> str:
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+        ruta = f.name
+    try:
+        with wave.open(ruta, "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(SAMPLE_RATE)
+            w.writeframes((np.clip(audio, -1, 1) * 32767).astype(np.int16).tobytes())
+        r = subprocess.run(
+            [str(YAP), "transcribe", "--locale", YAP_LOCALE.get(idioma, "es_MX"), ruta],
+            capture_output=True, text=True, timeout=60, check=True)
+        return r.stdout.strip()
+    finally:
+        Path(ruta).unlink(missing_ok=True)
+
+
 def transcribir(audio: np.ndarray, idioma: str = "es") -> str:
-    """Whisper local sobre el array (sin ffmpeg: le pasamos numpy directo)."""
-    import mlx_whisper  # import acá: el primer uso descarga el modelo
+    """Apple STT (yap) con fallback a Whisper local (mlx) si yap no está o falla."""
     if audio.size < SAMPLE_RATE // 2:  # menos de medio segundo: ruido
         return ""
+    if YAP.exists():
+        try:
+            return _transcribir_yap(audio, idioma)
+        except Exception:
+            pass  # binario roto, asset sin bajar, timeout: cae a Whisper
+    import mlx_whisper  # import acá: el primer uso descarga el modelo
     r = mlx_whisper.transcribe(audio, path_or_hf_repo=WHISPER, language=idioma)
     return r["text"].strip()
 
@@ -161,12 +196,14 @@ def main() -> None:
     session_id: str | None = None
 
     extra = f" + {ruta}" if ruta else ""
-    print(f"jarvis voz · oídos: whisper local · voz: {VOZ} · "
+    oidos = "apple (yap)" if YAP.exists() else "whisper local"
+    print(f"jarvis voz · oídos: {oidos} · voz: {VOZ} · "
           f"cerebro: suscripción · contexto: estrategia{extra}")
     print("decí (o escribí) 'salir' para terminar y guardar memoria\n")
 
-    # Precalentar Whisper en paralelo al saludo: carga el modelo ahora para
-    # que el primer turno real no pague esos segundos.
+    # Precalentar el STT en paralelo al saludo: con yap pre-verifica binario
+    # y asset (~0.5s); sin yap carga el modelo de Whisper para que el primer
+    # turno real no pague esos segundos.
     threading.Thread(
         target=lambda: transcribir(np.zeros(SAMPLE_RATE, dtype=np.float32)),
         daemon=True,
