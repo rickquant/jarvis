@@ -112,12 +112,12 @@ def grabar() -> np.ndarray:
     return np.concatenate(frames).flatten()
 
 
-def transcribir(audio: np.ndarray) -> str:
+def transcribir(audio: np.ndarray, idioma: str = "es") -> str:
     """Whisper local sobre el array (sin ffmpeg: le pasamos numpy directo)."""
     import mlx_whisper  # import acá: el primer uso descarga el modelo
     if audio.size < SAMPLE_RATE // 2:  # menos de medio segundo: ruido
         return ""
-    r = mlx_whisper.transcribe(audio, path_or_hf_repo=WHISPER, language="es")
+    r = mlx_whisper.transcribe(audio, path_or_hf_repo=WHISPER, language=idioma)
     return r["text"].strip()
 
 

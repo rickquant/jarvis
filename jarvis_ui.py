@@ -57,6 +57,7 @@ S = {
     "ultimo_poll": 0,       # último /api/estado — si nadie mira, el oído se pausa
     "avisos": [],           # timers vencidos etc. — el browser los recoge y los dice
     "timers": [],           # timers activos {fin, etiqueta} — el HUD los muestra en vivo
+    "idioma": "es",         # idioma de la UI — el oído transcribe en este idioma
     "lock": threading.Lock(),
 }
 _rec = {"stream": None, "frames": []}
@@ -173,7 +174,8 @@ def _manos_libres_loop() -> None:
                     S["fase"] = "listo"
                     continue
                 S["fase"] = "transcribiendo"
-                texto = transcribir(np.concatenate(frames).flatten())
+                texto = transcribir(np.concatenate(frames).flatten(),
+                                    S["idioma"])
                 # el pre-roll mete el wake word (y a veces ruido previo) al
                 # inicio — quitar hasta el "jarvis" inclusive, si está al frente
                 texto = re.sub(r"^.{0,40}?\bjarvis\b[\s,.:;!?]*", "", texto,
@@ -204,6 +206,10 @@ def estado():
         # heartbeat anti-eco: mientras la voz de jarvis suena, cada poll
         # renueva la pausa del oído (ver /api/hablando)
         S["hablando_browser"] = time.time()
+    if request.args.get("idioma") in ("es", "en"):
+        # el poll sincroniza el idioma al server: así el oído transcribe en
+        # el idioma correcto aun antes del primer turno tras el toggle
+        S["idioma"] = request.args["idioma"]
     err, S["manos_error"] = S["manos_error"], None  # se informa una sola vez
     aviso = None
     with S["lock"]:
@@ -323,7 +329,7 @@ def mic_stop():
         # tope de 60s: si el mic quedó abierto minutos (click perdido, tab
         # duplicado), transcribirlo entero colgaría el turno
         audio = audio[-60 * SAMPLE_RATE:]
-        texto = transcribir(audio)
+        texto = transcribir(audio, S["idioma"])
     finally:
         S["fase"] = "listo"
     if not texto:
@@ -341,6 +347,7 @@ def stream():
     """
     entrada = (request.json or {}).get("texto", "").strip()
     idioma = (request.json or {}).get("idioma", "es")
+    S["idioma"] = idioma  # el oído también transcribe en este idioma
     if not entrada:
         return jsonify({"error": "vacío"}), 400
     if S["ocupado"]:

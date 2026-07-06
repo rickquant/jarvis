@@ -675,7 +675,9 @@ setInterval(async () => {
   try {
     // ?hablando=1 es el heartbeat anti-eco: sostiene la pausa del oído
     // mientras la voz suena — si un "off" se pierde, el oído se recupera solo
-    const e = await api("estado" + (sonando ? "?hablando=1" : ""));
+    // ?idioma= sincroniza el toggle al server: el oído transcribe en ese idioma
+    const e = await api("estado?idioma=" + idioma +
+                        (sonando ? "&hablando=1" : ""));
     nivelMic = e.nivel || 0;
     if (e.manos_error) msg("sys", T().manosLibresErr + e.manos_error);
 
