@@ -284,6 +284,7 @@ const L = {
     sysOnline: "— sistemas en línea —",
     memGuardada: "memoria guardada → ", sesVacia: "sesión vacía, nada que guardar",
     noRespondio: "no respondió", manosLibresErr: "⚠ manos libres: ",
+    audioSusp: "🔇 audio suspendido por el browser — un click lo reactiva",
     panelAudio: "AUDIO // ESPECTRO", panelCerebro: "CEREBRO // TELEMETRÍA",
     turnosLbl: "TURNOS", latLbl: "LATENCIA / TURNO (s)", sinDatos: "— sin datos aún —",
     sesionLbl: "SESIÓN", cerebroSub: "SONNET · SUSCRIPCIÓN",
@@ -317,6 +318,7 @@ const L = {
     sysOnline: "— systems online —",
     memGuardada: "memory saved → ", sesVacia: "empty session, nothing to save",
     noRespondio: "didn't respond", manosLibresErr: "⚠ hands-free: ",
+    audioSusp: "🔇 audio suspended by the browser — click to resume",
     panelAudio: "AUDIO // SPECTRUM", panelCerebro: "BRAIN // TELEMETRY",
     turnosLbl: "TURNS", latLbl: "LATENCY / TURN (s)", sinDatos: "— no data yet —",
     sesionLbl: "SESSION", cerebroSub: "SONNET · SUBSCRIPTION",
@@ -359,7 +361,22 @@ function prepararAudio() {
   analizador = actx.createAnalyser();
   analizador.fftSize = 512;
   analizador.connect(actx.destination);
+  // si el sistema lo revive solo (p.ej. volvió la salida de audio), retomar
+  actx.onstatechange = () => {
+    if (actx.state === "running" && cola.length && !sonando) reproducirCola();
+  };
 }
+
+// gesto del usuario = permiso para revivir un AudioContext suspendido;
+// la cola retoma exactamente donde quedó (par del aviso audioSusp)
+function revivirAudio() {
+  if (!actx || actx.state === "running") return;
+  actx.resume().then(() => {
+    if (cola.length && !sonando) reproducirCola();
+  }).catch(() => {});
+}
+addEventListener("pointerdown", revivirAudio, true);
+addEventListener("keydown", revivirAudio, true);
 
 function decir(texto) {  // pide el mp3 ya (en paralelo) y lo encola en orden
   if (!actx) return;
@@ -381,7 +398,19 @@ async function reproducirCola() {
     if (!datos || !datos.byteLength) { subPoner(item.texto); continue; }
     // Safari/Chrome suspenden el AudioContext solos a veces (reporte
     // 2026-07-05: al 3er turno la voz moría) — revivirlo antes de cada pieza
-    if (actx.state !== "running") { try { await actx.resume(); } catch {} }
+    if (actx.state !== "running") {
+      try { await actx.resume(); } catch {}
+      if (actx.state !== "running") {
+        // el browser no deja revivirlo sin gesto: NO reproducir mudo (el
+        // watchdog haría avanzar toda la respuesta en silencio) — devolver
+        // la pieza a la cola, avisar, y el próximo click/tecla la retoma
+        cola.unshift(item);
+        subPoner(T().audioSusp, true);
+        sonando = false;
+        api("hablando", { on: false }).catch(() => {});
+        return;
+      }
+    }
     try {
       const buf = await actx.decodeAudioData(datos);
       // recortar los colchones de silencio que edge-tts deja en las puntas
