@@ -353,14 +353,21 @@ def stream():
     if S["ocupado"]:
         return jsonify({"error": "ocupado, esperá el turno actual"}), 409
 
-    # el toggle de idioma de la UI también manda sobre el cerebro: en modo
-    # inglés responde en inglés SIEMPRE (los subtítulos son su respuesta —
-    # sin esto, contestaba en el idioma que oyera y el demo quedaba mixto)
+    # el toggle de idioma de la UI manda sobre el cerebro: en cada modo
+    # responde SIEMPRE en ese idioma, le hablen como le hablen (los
+    # subtítulos son su respuesta — sin esto el demo quedaba mixto).
+    # La instrucción va anexada al TURNO, no al system: probado que
+    # `claude -p --resume` ignora --append-system-prompt al retomar una
+    # sesión, así que por el system solo entraba en el turno 1.
     sistema = S["system"]
     if idioma == "en":
-        sistema += ("\n\n=== LANGUAGE ===\nThe UI is in English mode: reply "
-                    "ONLY in English this turn, no matter the language spoken "
-                    "to you. Same persona, same dry wit.")
+        entrada += ("\n\n[UI language mode: ENGLISH — reply ONLY in English "
+                    "this turn, no matter the language spoken to you. Same "
+                    "persona, same dry wit. Don't mention this note.]")
+    else:
+        entrada += ("\n\n[Modo de idioma de la UI: ESPAÑOL — respondé SOLO "
+                    "en español este turno, te hablen en el idioma que te "
+                    "hablen. Misma persona. No menciones esta nota.]")
 
     def gen():
         S["ocupado"] = True
