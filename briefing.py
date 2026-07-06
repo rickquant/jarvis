@@ -84,12 +84,14 @@ def _capturas(vault: Path) -> str | None:
 
 def _inbox(vault: Path) -> str | None:
     """Notas sueltas del Inbox — pendientes de procesar. Se excluyen las
-    capturas (van aparte) y las memorias de sesión de Jarvis (ruido)."""
+    capturas (van aparte), las memorias de sesión de Jarvis (ruido) y el
+    README de la carpeta (documenta la estructura, no es pendiente)."""
     carpeta = vault / "00-Inbox"
     if not carpeta.is_dir():
         return None
     notas = [f.stem for f in sorted(carpeta.glob("*.md"))
-             if not f.name.startswith(("Capturas-Jarvis", "Jarvis-Sesion"))]
+             if not f.name.startswith(("Capturas-Jarvis", "Jarvis-Sesion",
+                                       "README"))]
     return ", ".join(notas[:12]) or None
 
 
