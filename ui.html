@@ -352,6 +352,7 @@ let turnos = 0, inicio = Date.now();
 let nivelMic = 0, nivelSuave = 0;   // RMS del mic (servidor) → pulso del reactor
 const latencias = [];               // últimos turnos, para el panel de telemetría
 const ondas = [];                   // timestamps de clicks → anillos expandiéndose
+let faseAnimada = "listo";          // última fase dibujada → onda al cambiar
 
 // ── Audio: TTS en el browser, con analizador para animar el reactor ─────
 let actx = null, analizador = null, fuente = null, sonando = false;
@@ -792,10 +793,11 @@ setInterval(() => {
 
 // ── Reactor (canvas) ─────────────────────────────────────────────────────
 const lienzo = $("#reactor"), ctx = lienzo.getContext("2d");
-// tope 1.5: en retina (2x) el canvas costaba 4x píxeles por frame y el HUD
-// laggeaba compitiendo con Whisper + el oído; a 1.5 el brillo/las líneas se
-// ven igual y son ~44% menos píxeles (fix de lag, 2026-07-05)
-const DPR = Math.min(window.devicePixelRatio || 1, 1.5);
+// Retina completa (2x) desde 2026-07-06: el tope de 1.5 era de la era en que
+// el canvas competía por el CPU con Whisper; con el STT fuera del proceso
+// (Neural Engine) hay headroom. Si el HUD no sostiene 60fps, el loop de
+// render se auto-degrada a 30 (ver abajo) — la nitidez no se sacrifica.
+const DPR = Math.min(window.devicePixelRatio || 1, 2);
 lienzo.width = 330 * DPR; lienzo.height = 330 * DPR;
 ctx.scale(DPR, DPR);
 const CX = 165, CY = 165;
@@ -803,10 +805,14 @@ const CX = 165, CY = 165;
 function dibujarReactor(t) {
   const fase = faseActual();
   const c = COLORES[fase] || COLORES.listo;
+  // transición de fase: un anillo se expande al cambiar de estado (reusa el
+  // sistema de ondas del click) — se VE cuando jarvis pasa a escuchar/pensar
+  if (fase !== faseAnimada) { faseAnimada = fase; ondas.push(performance.now()); }
   // amplitud: la voz de jarvis (analizador) o TU voz (nivel del mic, servidor)
   const objetivo = sonando ? nivelAudio()
                  : fase === "escuchando" ? Math.min(1, nivelMic * 16) : 0;
-  nivelSuave += (objetivo - nivelSuave) * 0.3;  // suavizado entre polls (calibrado a 30fps)
+  // suavizado entre polls, proporcional al framerate real (60 o 30)
+  nivelSuave += (objetivo - nivelSuave) * (fpsGap === 15 ? 0.16 : 0.3);
   const amp = nivelSuave;
   ctx.clearRect(0, 0, 330, 330);
 
@@ -913,6 +919,16 @@ function dibujarReactor(t) {
   ctx.lineWidth = 1;
   ctx.strokeStyle = c.dim + ".22)";
   ctx.beginPath(); ctx.arc(CX, CY, 146, 0, 7); ctx.stroke();
+
+  // halo exterior: aliento tenue que crece con la voz — gradiente barato,
+  // nada de shadowBlur (la lección de la era del lag sigue vigente)
+  const rH = 140 + amp * 12 + respiro * 3;
+  const halo = ctx.createRadialGradient(CX, CY, 100, CX, CY, rH + 18);
+  halo.addColorStop(0, "transparent");
+  halo.addColorStop(.72, c.dim + (.05 + amp * .13 + respiro * .02) + ")");
+  halo.addColorStop(1, "transparent");
+  ctx.fillStyle = halo;
+  ctx.beginPath(); ctx.arc(CX, CY, rH + 18, 0, 7); ctx.fill();
 }
 
 // ── Partículas de fondo ──────────────────────────────────────────────────
@@ -920,21 +936,33 @@ const pCanvas = $("#particulas"), pCtx = pCanvas.getContext("2d");
 let particulas = [];
 function armarParticulas() {
   pCanvas.width = innerWidth; pCanvas.height = innerHeight;
-  particulas = Array.from({ length: 50 }, () => ({
-    x: Math.random() * innerWidth, y: Math.random() * innerHeight,
-    v: .12 + Math.random() * .3, r: .6 + Math.random() * 1.3,
-    o: .08 + Math.random() * .2,
-  }));
+  // profundidad z (0=lejos, 1=cerca): tamaño, velocidad y brillo correlacionados
+  // — tres capas de paralaje con un solo campo (headroom de la era post-Whisper)
+  particulas = Array.from({ length: 90 }, () => {
+    const z = Math.random();
+    return {
+      x: Math.random() * innerWidth, y: Math.random() * innerHeight,
+      z, v: .08 + z * .42, r: .5 + z * 1.6, o: .05 + z * .24,
+      f: Math.random() * 6.28,   // fase del vaivén horizontal
+    };
+  });
 }
 armarParticulas();
 addEventListener("resize", armarParticulas);
 
 function dibujarParticulas() {
   pCtx.clearRect(0, 0, pCanvas.width, pCanvas.height);
+  // la sala respira con la voz: la deriva acelera y brilla con nivelSuave
+  const dt = fpsGap === 15 ? .5 : 1;               // velocidades calibradas a 30fps
+  const empuje = (1 + nivelSuave * 1.6) * dt;
+  const t = performance.now() / 1000;
   for (const p of particulas) {
-    p.y -= p.v;
+    p.y -= p.v * empuje;
+    p.x += Math.sin(t * .4 + p.f) * p.z * .25 * dt; // vaivén, más cerca = más ancho
     if (p.y < -4) { p.y = innerHeight + 4; p.x = Math.random() * innerWidth; }
-    pCtx.fillStyle = `rgba(79,216,235,${p.o})`;
+    if (p.x < -4) p.x = innerWidth + 4;
+    else if (p.x > innerWidth + 4) p.x = -4;
+    pCtx.fillStyle = `rgba(79,216,235,${p.o * (1 + nivelSuave * .8)})`;
     pCtx.beginPath(); pCtx.arc(p.x, p.y, p.r, 0, 7); pCtx.fill();
   }
 }
@@ -1021,16 +1049,21 @@ function dibujarPaneles(t) {
 }
 
 // ── Loop de render ───────────────────────────────────────────────────────
-// 30fps, no 60: el canvas convive con el oído de manos libres y a 60fps la
-// página se ponía laggy. A 30 no se nota en una animación ambiental.
-// (Hasta 2026-07-06 las partículas y paneles FUI se congelaban durante la
-// transcripción por el pico de CPU de Whisper; con el STT en el Neural
-// Engine vía yap ese pico ya no existe y el HUD queda vivo siempre.)
-let frameAnterior = 0;
+// 60fps con red de seguridad: en la era Whisper el canvas competía por el
+// CPU y se capaba a 30fps (y se congelaban partículas/paneles al
+// transcribir); con el STT en el Neural Engine hay headroom para 60. Si el
+// browser no lo sostiene (gaps >28ms sostenidos ~1.5s), se auto-degrada a
+// 30 para siempre — mejor 30 estables que 60 a tirones.
+let frameAnterior = 0, framesLentos = 0, fpsGap = 15; // 15ms ≈ 60fps; 33 ≈ 30
 (function render(now = 0) {
   requestAnimationFrame(render);
-  if (now - frameAnterior < 33) return;
+  if (now - frameAnterior < fpsGap) return;
+  const gap = now - frameAnterior;
   frameAnterior = now;
+  if (fpsGap === 15) {
+    framesLentos = gap > 28 ? framesLentos + 1 : Math.max(0, framesLentos - 2);
+    if (framesLentos > 90) fpsGap = 33;
+  }
   const t = now / 1000;
   dibujarReactor(t);
   dibujarParticulas();
