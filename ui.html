@@ -7,9 +7,11 @@
   @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600&family=Share+Tech+Mono&display=swap');
 
   :root {
-    --cyan: #4fd8eb;
-    --cyan-hi: #b8f3fc;
-    --cyan-dim: #1a6b78;
+    /* paleta del short real (Referencia-HUD, sesión 42): teal desaturado
+       para la máquina, blanco solo para datos — no cian saturado */
+    --cyan: #6fcabb;
+    --cyan-hi: #eafff9;
+    --cyan-dim: #2f7a6d;
     --ambar: #ebb54f;
     --bg: #05080d;
     --panel: rgba(79, 216, 235, 0.045);
@@ -21,12 +23,14 @@
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
   body {
+    /* fondo del short: casi negro con tinte teal, shafts de luz diagonales
+       y vignette — el grid cuadrado se fue (el reactivo del canvas queda) */
     background:
-      radial-gradient(ellipse at 50% 0%, rgba(79,216,235,.06) 0%, transparent 55%),
-      linear-gradient(rgba(79,216,235,.025) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(79,216,235,.025) 1px, transparent 1px),
+      radial-gradient(ellipse at 50% 45%, transparent 55%, rgba(0,0,0,.5) 100%),
+      linear-gradient(115deg, transparent 40%, rgba(111,202,187,.045) 49%, transparent 58%),
+      linear-gradient(70deg, transparent 55%, rgba(111,202,187,.025) 64%, transparent 74%),
+      radial-gradient(ellipse at 50% 0%, rgba(111,202,187,.05) 0%, transparent 55%),
       var(--bg);
-    background-size: auto, 44px 44px, 44px 44px, auto;
     color: var(--text);
     font-family: var(--sans);
     height: 100vh; overflow: hidden;
@@ -46,12 +50,12 @@
     display: flex; align-items: center; justify-content: space-between;
     padding: 14px 26px 12px;
     border-bottom: 1px solid var(--border);
-    background: linear-gradient(180deg, rgba(79,216,235,.05), transparent);
+    background: linear-gradient(180deg, rgba(111,202,187,.05), transparent);
   }
   #titulo { font-family: var(--mono); }
   #titulo b {
     font-weight: 400; font-size: 19px; letter-spacing: 9px; color: var(--cyan);
-    text-shadow: 0 0 14px rgba(79,216,235,.6);
+    text-shadow: 0 0 14px rgba(111,202,187,.6);
   }
   #titulo small { display: block; letter-spacing: 3.5px; font-size: 8.5px;
     color: var(--cyan-dim); margin-top: 3px; text-transform: uppercase; }
@@ -60,7 +64,7 @@
   .dato .k { font-size: 9px; letter-spacing: 2.5px; color: var(--cyan-dim);
     text-transform: uppercase; }
   .dato .v { font-family: var(--mono); font-size: 15px; color: var(--cyan);
-    text-shadow: 0 0 8px rgba(79,216,235,.35); }
+    text-shadow: 0 0 8px rgba(111,202,187,.35); }
 
   /* ── Layout ── */
   #main {
@@ -75,55 +79,60 @@
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     gap: 6px; border-right: 1px solid var(--border); padding: 10px;
   }
-  /* paneles FUI laterales — solo en modo HUD, decorativos pero con datos reales */
-  .panel { display: none; position: absolute; top: 50%; transform: translateY(-50%);
-    opacity: .9; pointer-events: none; }
-  body.hud .panel { display: block; }
-  #panelIzq { left: 5%; }
-  #panelDer { right: 5%; }
-  @media (max-width: 1100px) { .panel { display: none !important; } }
-  #reactor { width: 430px; height: 430px; max-width: 90%; cursor: pointer;
-    filter: drop-shadow(0 0 24px rgba(79,216,235,.18)); }
+  /* el canvas del sistema: su tamaño lo pone JS (en HUD domina el viewport —
+     rasgo 1 del short); sin drop-shadow: con un canvas grande el filtro se
+     paga por frame y el toro trae su propia luz */
+  #reactor { max-width: 94vw; cursor: pointer; }
   #fase {
     font-family: var(--mono); font-size: 12px; letter-spacing: 6px;
     color: var(--cyan); text-transform: uppercase; height: 18px;
-    text-shadow: 0 0 10px rgba(79,216,235,.5);
+    text-shadow: 0 0 10px rgba(111,202,187,.5);
   }
   #pista { font-size: 11px; letter-spacing: 1.5px; color: var(--cyan-dim); }
 
-  /* paneles situacionales: tarjetas que Jarvis materializa cuando hay algo
-     que MOSTRAR (clima, web, vault, agenda) — regla de las películas: la
-     información aparece cuando se necesita y se va sola. Animación de
-     materialización: swoop + revelado por scanline + micro-glitch. */
-  #panelesSit { position: fixed; left: 18px; top: 64px; width: 254px; z-index: 5;
-    display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
-  body:not(.hud) #panelesSit { display: none; }
-  .psit { pointer-events: auto; cursor: pointer; position: relative;
-    background: rgba(6,22,28,.78); border: 1px solid rgba(79,216,235,.28);
-    padding: 9px 12px 8px; font: 11px 'Share Tech Mono', monospace;
-    overflow: hidden; animation: psitIn .38s cubic-bezier(.2,.9,.25,1) both; }
-  .psit::before { content: ""; position: absolute; inset: 0; pointer-events: none;
-    background: linear-gradient(180deg, transparent, rgba(155,232,242,.30), transparent);
-    transform: translateY(-100%); animation: psitScan .5s ease-out .05s 1; }
-  .psit::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+  /* paneles situacionales — gramática del short (sesión 42): el contenido se
+     materializa GRANDE en el centro del aro, vive unos segundos y VUELA
+     encogiéndose a su chip del dock inferior. Click en la tarjeta = mandarla
+     al dock; click en el chip = traerla de vuelta. El server sigue mandando
+     los mismos paneles; solo cambió cómo se presentan. */
+  #sitCentro { position: fixed; left: 50%; top: 43%; transform: translate(-50%,-50%);
+    z-index: 5; width: min(470px, 78vw); display: flex; flex-direction: column;
+    gap: 10px; pointer-events: none; }
+  body:not(.hud) #sitCentro, body:not(.hud) #sitDock { display: none; }
+  .sitG { pointer-events: auto; cursor: pointer; position: relative;
+    background: rgba(3,14,12,.66); border: 1px solid rgba(234,255,249,.22);
+    padding: 13px 18px 11px; font: 13px 'Share Tech Mono', monospace;
+    overflow: hidden; backdrop-filter: blur(4px);
+    animation: sitIn .5s cubic-bezier(.34,1.4,.4,1) both; }
+  .sitG::before { content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: linear-gradient(180deg, transparent, rgba(234,255,249,.22), transparent);
+    transform: translateY(-100%); animation: psitScan .55s ease-out .08s 1; }
+  .sitG::after { content: ""; position: absolute; inset: 0; pointer-events: none;
     background: repeating-linear-gradient(0deg, rgba(0,0,0,.15) 0 1px, transparent 1px 3px); }
-  .psitT { color: rgba(79,216,235,.62); font-size: 8px; letter-spacing: 2.5px;
-    margin-bottom: 5px; }
-  .psitL { color: #bfeef5; white-space: nowrap; overflow: hidden;
-    text-overflow: ellipsis; line-height: 1.55; }
-  .psit.fuera { animation: psitOut .3s ease-in both; }
-  @keyframes psitIn {
-    0%   { opacity: 0; transform: translateY(-8px) scale(1.06); clip-path: inset(0 0 100% 0); }
-    55%  { opacity: 1; clip-path: inset(0 0 0 0); }
-    62%  { transform: translateX(2px); }
-    70%  { transform: translateX(-2px); }
-    100% { opacity: 1; transform: none; clip-path: inset(0 0 0 0); }
+  .psitT { color: rgba(234,255,249,.6); font-size: 9px; letter-spacing: 3.5px;
+    margin-bottom: 7px; }
+  .psitL { color: #dffef6; white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis; line-height: 1.6; }
+  .sitG.fuera, .chip.fuera { animation: psitOut .3s ease-in both; }
+  @keyframes sitIn {  /* se materializa desde el núcleo, con flare */
+    0%   { opacity: 0; transform: scale(.5); filter: brightness(2.4); }
+    60%  { opacity: 1; filter: brightness(1.25); }
+    100% { opacity: 1; transform: scale(1); filter: none; }
   }
   @keyframes psitScan { to { transform: translateY(100%); } }
   @keyframes psitOut {
-    to { opacity: 0; transform: translateY(-6px) scale(.97); clip-path: inset(0 0 100% 0); }
+    to { opacity: 0; transform: scale(.94); filter: brightness(1.6); }
   }
-  @media (max-width: 860px) { #panelesSit { display: none; } }
+  #sitDock { position: fixed; left: 50%; bottom: 12px; transform: translateX(-50%);
+    display: flex; gap: 10px; z-index: 5; }
+  .chip { cursor: pointer; font: 9px 'Share Tech Mono', monospace;
+    letter-spacing: 2.5px; color: rgba(234,255,249,.72);
+    border: 1px solid rgba(111,202,187,.35); border-top-width: 2px;
+    padding: 6px 14px; background: rgba(4,16,14,.72);
+    animation: chipIn .25s ease-out both; }
+  .chip:hover { background: rgba(111,202,187,.14); color: var(--cyan-hi); }
+  @keyframes chipIn { from { opacity: 0; transform: translateY(8px); } }
+  @media (max-width: 860px) { #sitCentro, #sitDock { display: none; } }
 
   /* timers activos: countdown en vivo bajo el reactor */
   #timers { display: flex; gap: 10px; min-height: 24px; flex-wrap: wrap;
@@ -175,14 +184,14 @@
     clip-path: polygon(0 0, 100% 0, 100% 100%, 12px 100%, 0 calc(100% - 12px));
     transition: border-color .2s, box-shadow .2s;
   }
-  #entrada:focus { border-color: rgba(79,216,235,.45); box-shadow: 0 0 18px rgba(79,216,235,.12); }
+  #entrada:focus { border-color: rgba(111,202,187,.45); box-shadow: 0 0 18px rgba(111,202,187,.12); }
   #entrada::placeholder { color: rgba(201,233,239,.3); }
   button {
     background: var(--panel); border: 1px solid var(--border); color: var(--cyan);
     padding: 0 20px; font-family: var(--mono); font-size: 11px; letter-spacing: 2px;
     text-transform: uppercase; cursor: pointer; transition: all .2s;
   }
-  button:hover { background: rgba(79,216,235,.14); box-shadow: 0 0 16px rgba(79,216,235,.2);
+  button:hover { background: rgba(111,202,187,.14); box-shadow: 0 0 16px rgba(111,202,187,.2);
     text-shadow: 0 0 8px var(--cyan); }
 
   /* ── Modo HUD: sin chat log, subtítulo efímero bajo el reactor ── */
@@ -194,7 +203,7 @@
     display: none; min-height: 96px; max-width: min(720px, 90vw);
     margin-top: 10px; text-align: center;
     font-size: 19px; line-height: 1.65; color: var(--text);
-    text-shadow: 0 0 18px rgba(79,216,235,.25);
+    text-shadow: 0 0 18px rgba(111,202,187,.25);
     opacity: 1; transition: opacity 1.4s ease;
   }
   body.hud #subtitulo { display: block; }
@@ -203,7 +212,7 @@
 
   #modo, #voz {
     margin-left: 22px; padding: 6px 14px; font-size: 10px;
-    border-color: rgba(79,216,235,.25); align-self: center;
+    border-color: rgba(111,202,187,.25); align-self: center;
   }
   #voz { margin-left: 10px; }
   #voz.libre { color: var(--ambar); border-color: rgba(235,181,79,.4);
@@ -215,7 +224,7 @@
      usuario — la clase se quita sola al terminar. */
   body.reconfig::before {
     content: ""; position: fixed; inset: 0; z-index: 6; pointer-events: none;
-    background: linear-gradient(180deg, transparent, rgba(155,232,242,.14), transparent)
+    background: linear-gradient(180deg, transparent, rgba(214,255,246,.14), transparent)
                 50% -30% / 100% 30% no-repeat;
     animation: reconfScan .55s ease-out forwards;
   }
@@ -255,19 +264,20 @@
   }
   #bootIdiomas .bi { font-size: 11px; letter-spacing: 3px; padding: 8px 18px; }
   #bootIdiomas .bi.activo {
-    border-color: rgba(79,216,235,.6); color: var(--cyan);
-    text-shadow: 0 0 8px rgba(79,216,235,.5);
+    border-color: rgba(111,202,187,.6); color: var(--cyan);
+    text-shadow: 0 0 8px rgba(111,202,187,.5);
   }
   #iniciar {
     margin-top: 18px; padding: 14px 42px; font-size: 13px; letter-spacing: 5px;
-    border-color: rgba(79,216,235,.4); opacity: 0; animation: aparecer .4s 1.6s forwards;
+    border-color: rgba(111,202,187,.4); opacity: 0; animation: aparecer .4s 1.6s forwards;
   }
 </style>
 </head>
 <body>
 
 <canvas id="particulas"></canvas>
-<div id="panelesSit"></div>
+<div id="sitCentro"></div>
+<div id="sitDock"></div>
 
 <div id="boot">
   <div class="linea" style="animation-delay:.15s">&gt; NÚCLEO ............ <b>EN LÍNEA</b></div>
@@ -303,8 +313,6 @@
     <div id="pista">click en el reactor para hablar · click de nuevo para cortar</div>
     <div id="timers"></div>
     <div id="subtitulo"></div>
-    <canvas id="panelIzq" class="panel" width="180" height="320"></canvas>
-    <canvas id="panelDer" class="panel" width="180" height="320"></canvas>
   </div>
 
   <div id="ladoChat">
@@ -357,10 +365,6 @@ const L = {
     memGuardada: "memoria guardada → ", sesVacia: "sesión vacía, nada que guardar",
     noRespondio: "no respondió", manosLibresErr: "⚠ manos libres: ",
     audioSusp: "🔇 audio suspendido por el browser — un click lo reactiva",
-    panelAudio: "AUDIO // ESPECTRO", panelCerebro: "CEREBRO // TELEMETRÍA",
-    turnosLbl: "TURNOS", latLbl: "LATENCIA / TURNO (s)", sinDatos: "— sin datos aún —",
-    sesionLbl: "SESIÓN", cerebroSub: "SONNET · SUSCRIPCIÓN",
-    wdg: { lat: "LAT", aud: "AUD", ses: "SES", trn: "TRN" },
     saludo: h => h < 12 ? "Buenos días" : h < 19 ? "Buenas tardes" : "Buenas noches",
     corto: s => `${s}, Charles. Sistemas en línea.`,
     intro: s => [`${s}, Charles.`,
@@ -396,10 +400,6 @@ const L = {
     memGuardada: "memory saved → ", sesVacia: "empty session, nothing to save",
     noRespondio: "didn't respond", manosLibresErr: "⚠ hands-free: ",
     audioSusp: "🔇 audio suspended by the browser — click to resume",
-    panelAudio: "AUDIO // SPECTRUM", panelCerebro: "BRAIN // TELEMETRY",
-    turnosLbl: "TURNS", latLbl: "LATENCY / TURN (s)", sinDatos: "— no data yet —",
-    sesionLbl: "SESSION", cerebroSub: "SONNET · SUBSCRIPTION",
-    wdg: { lat: "LAT", aud: "AUD", ses: "SES", trn: "TRN" },
     saludo: h => h < 12 ? "Good morning" : h < 19 ? "Good afternoon" : "Good evening",
     corto: s => `${s}, Charles. Systems online.`,
     intro: s => [`${s}, Charles.`,
@@ -413,11 +413,11 @@ const L = {
 let idioma = localStorage.getItem("jarvis-idioma") || "es";
 const T = () => L[idioma];
 const COLORES = {
-  listo:          { main: "#4fd8eb", dim: "rgba(79,216,235," },
+  listo:          { main: "#6fcabb", dim: "rgba(111,202,187," },
   escuchando:     { main: "#ebb54f", dim: "rgba(235,181,79," },
-  transcribiendo: { main: "#9be8f2", dim: "rgba(155,232,242," },
-  pensando:       { main: "#9be8f2", dim: "rgba(155,232,242," },
-  hablando:       { main: "#4fd8eb", dim: "rgba(79,216,235," },
+  transcribiendo: { main: "#d6fff6", dim: "rgba(214,255,246," },
+  pensando:       { main: "#d6fff6", dim: "rgba(214,255,246," },
+  hablando:       { main: "#6fcabb", dim: "rgba(111,202,187," },
 };
 
 let grabando = false, ocupado = false, faseServidor = "listo";
@@ -433,7 +433,6 @@ let actx = null, analizador = null, fuente = null, sonando = false;
 let ultimoFiller = 0, fillerTimer = null;  // filler hablado en esperas largas
 let alArrancarAudio = null;  // hook: turno() lo usa para soltar el texto justo cuando suena la voz
 const cola = [];          // promesas de ArrayBuffer, en orden de oración
-const freqs = new Uint8Array(64);
 const onda = new Uint8Array(256);
 
 function prepararAudio() {
@@ -577,6 +576,7 @@ $("#modo").onclick = () => {
   ondas.push(performance.now());
   try { bip(1046, .08); setTimeout(() => bip(1567, .06), 90); } catch {}
   ponerModo(document.body.classList.contains("hud") ? "consola" : "hud");
+  medirReactor();  // el canvas cambia de escala con el modo (HUD domina el viewport)
 };
 ponerModo(localStorage.getItem("jarvis-modo") || "hud");
 
@@ -806,35 +806,82 @@ $("#cerrar").onclick = async () => {
   } finally { ocupado = false; }
 };
 
-// ── Paneles situacionales ────────────────────────────────────────────────
+// ── Paneles situacionales: gramática del short (sesión 42) ──────────────
 // El server decide QUÉ mostrar (datos deterministas: clima, tool use del
-// cerebro, briefing); acá solo se materializan y despiden. Click = cerrar.
-const sitVivos = new Map();     // id → nodo en pantalla
-const sitCerrados = new Set();  // ids cerrados a mano: no resucitan
+// cerebro, briefing); acá se materializan GRANDES al centro del aro y a los
+// segundos VUELAN encogiéndose a su chip del dock — como los íconos de la
+// app de Marvel. Click en la tarjeta = al dock; click en el chip = vuelve.
+const sitInfo = new Map();   // id → { panel, donde: "centro"|"dock", nodo }
+const esc2 = s => s.replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+
+function sitGrande(p) {
+  const nodo = document.createElement("div");
+  nodo.className = "sitG";
+  nodo.innerHTML = `<div class="psitT">◈ ${esc2(T().panelTipos[p.tipo] || p.tipo.toUpperCase())}</div>` +
+    p.lineas.map(l => `<div class="psitL">${esc2(l)}</div>`).join("");
+  nodo.onclick = () => aDock(p.id);
+  $("#sitCentro").appendChild(nodo);
+  return nodo;
+}
+
+function aDock(id) {
+  const info = sitInfo.get(id);
+  if (!info || info.donde !== "centro") return;
+  const grande = info.nodo;
+  // el chip nace primero (para saber a dónde volar) y aparece al aterrizar
+  const chip = document.createElement("div");
+  chip.className = "chip";
+  chip.textContent = "◈ " + (T().panelTipos[info.panel.tipo] || info.panel.tipo.toUpperCase());
+  chip.onclick = () => alCentro(id);
+  $("#sitDock").appendChild(chip);
+  info.donde = "dock"; info.nodo = chip;
+  const a = grande.getBoundingClientRect(), b = chip.getBoundingClientRect();
+  grande.style.pointerEvents = "none";
+  grande.animate([
+    { transform: "none", opacity: 1 },
+    { transform: `translate(${b.left + b.width / 2 - a.left - a.width / 2}px,` +
+                 `${b.top + b.height / 2 - a.top - a.height / 2}px) scale(.07)`,
+      opacity: .3 },
+  ], { duration: 480, easing: "cubic-bezier(.5,-.28,.28,1)" })
+   .onfinish = () => grande.remove();
+  chip.animate([{ opacity: 0 }, { opacity: 0, offset: .75 }, { opacity: 1 }],
+               { duration: 560 });
+  try { bip(740, 0.05); } catch {}      // "aterrizó en el dock"
+}
+
+function alCentro(id) {
+  const info = sitInfo.get(id);
+  if (!info || info.donde !== "dock") return;
+  // lo que esté en el centro cede el lugar (un contenido a la vez, como el short)
+  for (const [otro, oInfo] of sitInfo)
+    if (oInfo.donde === "centro") { clearTimeout(oInfo.timer); aDock(otro); }
+  info.nodo.remove();
+  info.donde = "centro";
+  info.nodo = sitGrande(info.panel);
+  info.timer = setTimeout(() => aDock(id), 6000);
+  try { bip(1567, 0.05); } catch {}
+}
+
 function pintarPaneles(lista) {
   lista = lista || [];
-  const esc2 = s => s.replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
   const ids = new Set(lista.map(p => p.id));
-  for (const [id, nodo] of sitVivos) {
+  for (const [id, info] of sitInfo) {          // TTL del server: se despide
     if (!ids.has(id)) {
-      sitVivos.delete(id);
-      nodo.classList.add("fuera");
-      setTimeout(() => nodo.remove(), 320);
+      sitInfo.delete(id); clearTimeout(info.timer);
+      info.nodo.classList.add("fuera");
+      setTimeout(nodo => nodo.remove(), 320, info.nodo);
     }
   }
   for (const p of lista) {
-    if (sitVivos.has(p.id) || sitCerrados.has(p.id)) continue;
-    const nodo = document.createElement("div");
-    nodo.className = "psit";
-    nodo.innerHTML = `<div class="psitT">◈ ${esc2(T().panelTipos[p.tipo] || p.tipo.toUpperCase())}</div>` +
-      p.lineas.map(l => `<div class="psitL">${esc2(l)}</div>`).join("");
-    nodo.onclick = () => {
-      sitCerrados.add(p.id); sitVivos.delete(p.id);
-      nodo.classList.add("fuera");
-      setTimeout(() => nodo.remove(), 320);
-    };
-    $("#panelesSit").appendChild(nodo);
-    sitVivos.set(p.id, nodo);
+    if (sitInfo.has(p.id)) continue;
+    // el que estaba al centro pasa al dock: entra el contenido nuevo
+    for (const [otro, oInfo] of sitInfo)
+      if (oInfo.donde === "centro") { clearTimeout(oInfo.timer); aDock(otro); }
+    const info = { panel: p, donde: "centro", nodo: null, timer: 0 };
+    sitInfo.set(p.id, info);
+    info.nodo = sitGrande(p);
+    info.timer = setTimeout(() => aDock(p.id), 5200);  // vive, y vuela al dock
+    flare = Math.max(flare, .7);                       // el aro acusa el evento
     try { bip(1567, 0.05); } catch {}   // "dato en pantalla"
   }
 }
@@ -849,7 +896,7 @@ setInterval(async () => {
     const e = await api("estado?idioma=" + idioma +
                         (sonando ? "&hablando=1" : ""));
     nivelMic = e.nivel || 0;
-    if (e.clima) $("#tClima").textContent = e.clima;  // refrescado cada 45 min
+    if (e.clima) { $("#tClima").textContent = e.clima; climaTxt = e.clima; }  // cada 45 min
     if (e.manos_error) msg("sys", T().manosLibresErr + e.manos_error);
 
     // aviso de timer vencido: bip de atención + jarvis lo dice por voz
@@ -930,217 +977,286 @@ setInterval(() => {
                            || T().fases[faseActual()] || faseActual();
 }, 1000);
 
-// ── Reactor (canvas) ─────────────────────────────────────────────────────
+// ── Sistema visual (canvas): el look REAL del short (sesión 42) ─────────
+// Referencia-HUD: un TORO orgánico de partículas teal que ondula en cada
+// frame (el héroe visual), esfera geodésica de núcleo, y una capa
+// instrumento BLANCA para los datos. Reglas intactas: sin shadowBlur,
+// geometría precalculada, presupuesto de partículas fijo — el costo por
+// frame decide si el Air sostiene 60fps, no el framerate.
 const lienzo = $("#reactor"), ctx = lienzo.getContext("2d");
-// Retina completa (2x) desde 2026-07-06: el tope de 1.5 era de la era en que
-// el canvas competía por el CPU con Whisper; con el STT fuera del proceso
-// (Neural Engine) hay headroom. Si el HUD no sostiene 60fps, el loop de
-// render se auto-degrada a 30 (ver abajo) — la nitidez no se sacrifica.
 const DPR = Math.min(window.devicePixelRatio || 1, 2);
-lienzo.width = 430 * DPR; lienzo.height = 430 * DPR;
-ctx.scale(DPR, DPR);
-const CX = 215, CY = 215;
+let S = 430, CX = 215, CY = 215, R = 198;   // lado, centro y radio del sistema
 
-// anillos cinéticos: la velocidad ya no salta al cambiar de fase — se INTEGRA
-// (ángulo acumulado) y hace easing hacia el objetivo, con un kick de
-// aceleración en cada transición: la turbina revoluciona y se asienta
-let velGiro = .18, anguloGiro = 0, tGiroPrev = 0;
+function medirReactor() {
+  const hud = document.body.classList.contains("hud");
+  // rasgo 1 del short: el sistema domina el viewport (con aire alrededor)
+  S = hud ? Math.round(Math.min(innerHeight * .74, innerWidth * .58, 780))
+          : Math.round(Math.min(380, innerWidth * .92));
+  lienzo.width = S * DPR; lienzo.height = S * DPR;
+  lienzo.style.width = S + "px"; lienzo.style.height = S + "px";
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  CX = CY = S / 2; R = S * .46;
+}
+addEventListener("resize", medirReactor);
+
+// el toro: cada partícula vive en el aro (ángulo + offset radial) y su
+// turbulencia son sumas de senos desfasados — ruido barato, cero librerías
+const TORO_N = 430;                          // presupuesto (bajar si el Air sufre)
+const toro = Array.from({ length: TORO_N }, () => ({
+  a: Math.random() * 6.283,
+  rof: Math.random() + Math.random() - 1,    // campana barata: denso al medio
+  s: (.04 + Math.random() * .11) * (Math.random() < .84 ? 1 : -1),
+  f1: Math.random() * 6.283, f2: Math.random() * 6.283, f3: Math.random() * 6.283,
+  w1: .5 + Math.random() * 1.1, w2: 1.3 + Math.random() * 2.1,
+  sz: .8 + Math.random() * 1.6,
+  br: .2 + Math.random() * .8,
+  cb: Math.random() < .82 ? 0 : Math.random() < .6 ? 1 : 2,  // bucket de color
+  j: Math.random(),                          // stagger del ensamblaje de boot
+  ex: 0, ey: 0,                              // punto de partida del ensamblaje
+}));
+
+// esfera geodésica del núcleo: puntos por espiral áurea + aristas entre
+// vecinos, todo precalculado — por frame solo rota en Y y proyecta
+const ESF_N = 96, esfP = [], esfE = [];
+{
+  const tilt = .42, ct = Math.cos(tilt), st = Math.sin(tilt);
+  for (let i = 0; i < ESF_N; i++) {
+    const y = 1 - 2 * (i + .5) / ESF_N, r = Math.sqrt(1 - y * y);
+    const ph = i * 2.39996;
+    const x = Math.cos(ph) * r, z = Math.sin(ph) * r;
+    esfP.push([x, y * ct - z * st, y * st + z * ct]);   // tilt horneado
+  }
+  for (let i = 0; i < ESF_N; i++)
+    for (let k = i + 1; k < ESF_N; k++) {
+      const dx = esfP[i][0] - esfP[k][0], dy = esfP[i][1] - esfP[k][1],
+            dz = esfP[i][2] - esfP[k][2];
+      if (dx * dx + dy * dy + dz * dz < .16) esfE.push([i, k]);
+    }
+}
+
+let flare = 0;      // el aro se aviva en cada transición y se asienta (short)
+let ensT0 = 0;      // ensamblaje de boot: las partículas convergen al aro
+let letras = null;  // texto JARVIS en partículas (boot)
+
+function ensamblar() {
+  ensT0 = performance.now();
+  for (const p of toro) {
+    p.ex = CX + (Math.random() - .5) * S * 1.9;
+    p.ey = CY + (Math.random() - .5) * S * 1.9;
+  }
+}
+// easing de servo del short: acelera, se pasa un pelo y se asienta
+const eBack = k => { const c = 1.70158; return 1 + (c + 1) * (k - 1) ** 3 + c * (k - 1) ** 2; };
+
+function textoJarvis() {
+  // muestrea "J.A.R.V.I.S." de un canvas offscreen → puntos que las
+  // partículas forman con el barrido izquierda→derecha del short (~0.9s),
+  // sostienen unos segundos y disuelven en remolino
+  const w = Math.round(S * .78), h = Math.round(S * .2);
+  const off = document.createElement("canvas");
+  off.width = w; off.height = h;
+  const c2 = off.getContext("2d", { willReadFrequently: true });
+  c2.font = "600 " + Math.round(h * .58) + "px Rajdhani, sans-serif";
+  c2.textAlign = "center"; c2.textBaseline = "middle";
+  c2.fillStyle = "#fff";
+  c2.fillText("J.A.R.V.I.S.", w / 2, h / 2);
+  const img = c2.getImageData(0, 0, w, h).data;
+  const paso = Math.max(3, Math.round(S / 175)), pts = [];
+  for (let y = 0; y < h; y += paso)
+    for (let x = 0; x < w; x += paso)
+      if (img[(y * w + x) * 4 + 3] > 110)
+        pts.push({ x: CX - w / 2 + x, y: CY - h / 2 + y,
+                   dx: (Math.random() - .5) * S * .09,
+                   dy: (Math.random() - .5) * S * .09,
+                   j: Math.random() });
+  letras = { pts, t0: performance.now(), w };
+}
 
 function dibujarReactor(t) {
   const fase = faseActual();
   const c = COLORES[fase] || COLORES.listo;
-  // transición de fase: un anillo se expande al cambiar de estado (reusa el
-  // sistema de ondas del click) — se VE cuando jarvis pasa a escuchar/pensar
+  // transición de fase: el aro FLAREA (se aviva y asienta, como el short) + onda
   if (fase !== faseAnimada) {
     faseAnimada = fase;
     ondas.push(performance.now());
-    velGiro += 2.2;  // kick cinético: los anillos revolucionan y decaen solos
+    flare = 1;
   }
+  flare *= fpsGap === 15 ? .955 : .912;
   // amplitud: la voz de jarvis (analizador) o TU voz (nivel del mic, servidor)
   const objetivo = sonando ? nivelAudio()
                  : fase === "escuchando" ? Math.min(1, nivelMic * 16) : 0;
   // suavizado entre polls, proporcional al framerate real (60 o 30)
   nivelSuave += (objetivo - nivelSuave) * (fpsGap === 15 ? 0.16 : 0.3);
   const amp = nivelSuave;
-  ctx.clearRect(0, 0, 430, 430);
+  ctx.clearRect(0, 0, S, S);
+  const esc = R / 200;
 
-  // velocidad objetivo según estado; la real la persigue con easing y la voz
-  // le suma empuje — el giro respira con la amplitud, no queda constante
-  const vel = { listo: .18, escuchando: .55, transcribiendo: 1.6, pensando: 1.6, hablando: .7 }[fase] || .18;
-  const dtG = Math.min(.06, Math.max(0, t - tGiroPrev)); tGiroPrev = t;
-  velGiro += (vel + amp * .9 - velGiro) * Math.min(1, dtG * 3.2);
-  anguloGiro += velGiro * dtG;
-  const respiro = Math.sin(t * (fase === "listo" ? 1.1 : 3.4)) * .5 + .5;
-
-  if (sonando && analizador) analizador.getByteFrequencyData(freqs);
-
-  // núcleo — el glow es el propio gradiente radial, sin shadowBlur: el blur
-  // se re-renderiza por frame y era lo más caro del canvas (lag al hablar)
-  const rN = 27 + respiro * 3 + amp * 15;
-  const rG = rN * 1.9 + 18 + amp * 20 + respiro * 4;
-  const grad = ctx.createRadialGradient(CX, CY, 0, CX, CY, rG);
-  grad.addColorStop(0, "#f4feff");
-  grad.addColorStop(.3, c.main);
-  grad.addColorStop(1, "transparent");
-  ctx.fillStyle = grad;
-  ctx.beginPath(); ctx.arc(CX, CY, rG, 0, 7); ctx.fill();
-
-  // anillo de bobinas (10 segmentos, gira con el ángulo integrado; los
-  // segmentos se estiran con la voz — el anillo se siente vivo, no de reloj)
-  ctx.lineWidth = 11;
-  const seg = .38 + respiro * .08 + amp * .16;
-  for (let i = 0; i < 10; i++) {
-    const a = anguloGiro + i * Math.PI / 5;
-    ctx.strokeStyle = c.dim + (.55 + respiro * .2) + ")";
-    ctx.beginPath(); ctx.arc(CX, CY, 66, a, a + seg); ctx.stroke();
+  // ── esfera geodésica (núcleo): tenue, con motas especulares ──
+  const rE = R * .22, ang = t * .21;
+  const ca = Math.cos(ang), sa = Math.sin(ang);
+  const px = [], py = [], pz = [];
+  for (let i = 0; i < ESF_N; i++) {
+    const q = esfP[i];
+    px.push(CX + (q[0] * ca + q[2] * sa) * rE);
+    py.push(CY + q[1] * rE);
+    pz.push(-q[0] * sa + q[2] * ca);
   }
-
-  // anillo punteado (contra-gira)
-  ctx.lineWidth = 1.4;
-  ctx.strokeStyle = c.dim + ".5)";
-  ctx.setLineDash([2, 7]);
-  ctx.beginPath(); ctx.arc(CX, CY, 90, -anguloGiro * 1.6, -anguloGiro * 1.6 + 7); ctx.stroke();
-  ctx.setLineDash([]);
-
-  // triple arco fino (contra-gira lento): capa cinética extra entre bobinas
-  // y ticks — tres arcos desfasados 120° que se abren con la amplitud
-  ctx.lineWidth = 2;
-  for (let i = 0; i < 3; i++) {
-    const a = -anguloGiro * .55 + i * 2.094;
-    ctx.strokeStyle = c.dim + (.3 + amp * .35) + ")";
-    ctx.beginPath(); ctx.arc(CX, CY, 79, a, a + .6 + amp * .5); ctx.stroke();
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = c.dim + ".10)";
+  ctx.beginPath();
+  for (const [i, k] of esfE) {
+    if (pz[i] + pz[k] < -.2) continue;      // el fondo de la esfera casi no se ve
+    ctx.moveTo(px[i], py[i]); ctx.lineTo(px[k], py[k]);
   }
-
-  // anillo de marcas (72 ticks, las largas cada 6)
-  for (let i = 0; i < 72; i++) {
-    const a = i * Math.PI / 36 + t * .04;
-    const L = i % 6 === 0 ? 9 : 4;
-    ctx.strokeStyle = c.dim + (i % 6 === 0 ? ".55)" : ".3)");
-    ctx.lineWidth = i % 6 === 0 ? 1.6 : 1;
-    ctx.beginPath();
-    ctx.moveTo(CX + Math.cos(a) * 112, CY + Math.sin(a) * 112);
-    ctx.lineTo(CX + Math.cos(a) * (112 + L), CY + Math.sin(a) * (112 + L));
-    ctx.stroke();
+  ctx.stroke();
+  for (let i = 0; i < ESF_N; i++) {
+    const d = (pz[i] + 1) / 2;
+    if (d < .35) continue;
+    ctx.globalAlpha = .12 + d * d * (.4 + amp * .5);
+    ctx.fillStyle = d > .82 ? "#f4fffc" : c.main;   // motas especulares (still t13)
+    ctx.fillRect(px[i] - .7, py[i] - .7, 1.5, 1.5);
   }
+  ctx.globalAlpha = 1;
+  // anillos grabados casi invisibles alrededor del núcleo
+  ctx.strokeStyle = c.dim + ".07)";
+  ctx.beginPath(); ctx.arc(CX, CY, rE * 1.38, 0, 7); ctx.stroke();
+  ctx.beginPath(); ctx.arc(CX, CY, rE * 1.62, 0, 7); ctx.stroke();
+  // aliento del núcleo: respira con la voz (gradiente barato, sin shadowBlur)
+  const rB = rE * (.85 + amp * .55);
+  const bloom = ctx.createRadialGradient(CX, CY, 0, CX, CY, rB);
+  bloom.addColorStop(0, c.dim + (.10 + amp * .32) + ")");
+  bloom.addColorStop(1, "transparent");
+  ctx.fillStyle = bloom;
+  ctx.beginPath(); ctx.arc(CX, CY, rB, 0, 7); ctx.fill();
 
-  // cometa: arco rápido cuando procesa
-  if (fase === "pensando" || fase === "transcribiendo") {
-    ctx.lineWidth = 2.2;
-    ctx.strokeStyle = c.main;
-    const a = t * 3.4;
-    ctx.beginPath(); ctx.arc(CX, CY, 101, a, a + 1.1); ctx.stroke();
-    ctx.beginPath(); ctx.arc(CX, CY, 101, a + Math.PI, a + Math.PI + 1.1); ctx.stroke();
+  // ── capa instrumento (blanca): los datos, encima de lo orgánico ──
+  dibujarInstrumento(t, amp, fase);
+
+  // ── el TORO: el héroe visual — ondula SIEMPRE, nunca hay dos frames iguales ──
+  const R0 = R * .76, banda = R * .10;
+  const turb = banda * (.6 + amp * 1.2 + flare * .9);
+  const cols = [c.main, "#eafff9", c.dim + ".9)"];
+  const ensE = ensT0 ? performance.now() - ensT0 : -1;
+  if (ensT0 && ensE > 2400) ensT0 = 0;
+  for (let b = 0; b < 3; b++) {           // 3 pasadas: un fillStyle por bucket
+    ctx.fillStyle = cols[b];
+    for (const p of toro) {
+      if (p.cb !== b) continue;
+      const a = p.a + t * p.s;
+      const w = Math.sin(t * p.w1 + p.f1 + a * 2.3) + .5 * Math.sin(t * p.w2 + p.f2);
+      const rr = R0 + p.rof * banda + w * turb * .55;
+      let x = CX + Math.cos(a) * rr;
+      let y = CY + Math.sin(a) * (rr * .96) + Math.sin(t * .6 + p.f3) * banda * .4;
+      let al = p.br * (.3 + .42 * Math.abs(w) + flare * .55 + amp * .25);
+      if (ensT0) {                        // boot: convergen con easing de servo
+        const k = Math.max(0, Math.min(1, (ensE - p.j * 650) / 1400));
+        const f = eBack(k);
+        x = p.ex + (x - p.ex) * f; y = p.ey + (y - p.ey) * f;
+        al *= .15 + .85 * k;
+      }
+      ctx.globalAlpha = Math.min(.85, al);
+      const sz = p.sz * esc;
+      ctx.fillRect(x, y, sz, sz);
+    }
   }
+  ctx.globalAlpha = 1;
 
-  // barras de espectro cuando habla (la voz, en vivo)
-  if (sonando) {
-    ctx.lineWidth = 2.4;
-    for (let i = 0; i < 56; i++) {
-      const a = i * Math.PI / 28 - Math.PI / 2;
-      const f = freqs[Math.floor(i * freqs.length / 56)] / 255;
-      const L = 3 + f * 22;
-      ctx.strokeStyle = c.dim + (.25 + f * .65) + ")";
-      ctx.beginPath();
-      ctx.moveTo(CX + Math.cos(a) * 128, CY + Math.sin(a) * 128);
-      ctx.lineTo(CX + Math.cos(a) * (128 + L), CY + Math.sin(a) * (128 + L));
-      ctx.stroke();
+  // ── texto JARVIS en partículas (boot): barrido L→R, sostiene, remolino ──
+  if (letras) {
+    const e = performance.now() - letras.t0;
+    const DIN = 950, HOLD = 2200, OUT = 850;
+    if (e > DIN + HOLD + OUT) letras = null;
+    else {
+      ctx.fillStyle = "#eafff9";
+      const x0 = CX - letras.w / 2;
+      for (const q of letras.pts) {
+        const dIn = ((q.x - x0) / letras.w) * DIN * .72 + q.j * 230;
+        if (e < dIn) continue;
+        const k = Math.min(1, (e - dIn) / 240);
+        let x = q.x + q.dx * (1 - k), y = q.y + q.dy * (1 - k);
+        let al = k * (.35 + q.j * .6);
+        if (e > DIN + HOLD) {
+          const ko = (e - DIN - HOLD) / OUT;
+          const aq = Math.atan2(y - CY, x - CX) + ko * (1.2 + q.j);
+          const rq = Math.hypot(x - CX, y - CY) * (1 + ko * ko * 1.4);
+          x = CX + Math.cos(aq) * rq; y = CY + Math.sin(aq) * rq;
+          al *= 1 - ko;
+        }
+        ctx.globalAlpha = al;
+        ctx.fillRect(x, y, 1.7, 1.7);
+      }
+      ctx.globalAlpha = 1;
     }
   }
 
-  // texto circular girando: la fase actual, estilo Iron Man
-  const rotulo = ("  J.A.R.V.I.S  ·  " + (T().fases[fase] || fase) + "  ·").toUpperCase();
-  ctx.font = "9px 'Share Tech Mono', monospace";
-  ctx.fillStyle = c.dim + ".55)";
-  for (let i = 0; i < rotulo.length; i++) {
-    const a = t * .1 + i * 2 * Math.PI / rotulo.length;
-    ctx.save();
-    ctx.translate(CX + Math.cos(a) * 156, CY + Math.sin(a) * 156);
-    ctx.rotate(a + Math.PI / 2);
-    ctx.fillText(rotulo[i], -3, 0);
-    ctx.restore();
-  }
-
-  // ondas de click: anillos que se expanden y mueren
+  // ── ondas de click (blancas, sutiles) + pulso de escucha ──
   const ahora = performance.now();
   for (let i = ondas.length - 1; i >= 0; i--) {
     const edad = (ahora - ondas[i]) / 800;
     if (edad >= 1) { ondas.splice(i, 1); continue; }
-    ctx.lineWidth = 1.6;
-    ctx.strokeStyle = c.dim + (1 - edad) * .6 + ")";
-    ctx.beginPath(); ctx.arc(CX, CY, 40 + edad * 115, 0, 7); ctx.stroke();
+    ctx.lineWidth = 1.4;
+    ctx.strokeStyle = "rgba(240,252,249," + (1 - edad) * .45 + ")";
+    ctx.beginPath(); ctx.arc(CX, CY, R * (.2 + edad * .75), 0, 7); ctx.stroke();
   }
-
-  // pulso de escucha: ondas que se expanden hacia el centro
   if (fase === "escuchando") {
     const p = (t * .9) % 1;
     ctx.lineWidth = 1.5;
     ctx.strokeStyle = c.dim + (1 - p) * .5 + ")";
-    ctx.beginPath(); ctx.arc(CX, CY, 130 - p * 60, 0, 7); ctx.stroke();
+    ctx.beginPath(); ctx.arc(CX, CY, R * (.9 - p * .4), 0, 7); ctx.stroke();
   }
-
-  // aro exterior fijo
-  ctx.lineWidth = 1;
-  ctx.strokeStyle = c.dim + ".22)";
-  ctx.beginPath(); ctx.arc(CX, CY, 146, 0, 7); ctx.stroke();
-
-  // halo exterior: aliento tenue que crece con la voz — gradiente barato,
-  // nada de shadowBlur (la lección de la era del lag sigue vigente)
-  const rH = 140 + amp * 12 + respiro * 3;
-  const halo = ctx.createRadialGradient(CX, CY, 100, CX, CY, rH + 18);
-  halo.addColorStop(0, "transparent");
-  halo.addColorStop(.72, c.dim + (.05 + amp * .13 + respiro * .02) + ")");
-  halo.addColorStop(1, "transparent");
-  ctx.fillStyle = halo;
-  ctx.beginPath(); ctx.arc(CX, CY, rH + 18, 0, 7); ctx.fill();
-
-  dibujarWidgets(t, c, amp);
 }
 
-// widgets radiales orbitando el reactor (look Marvel): 4 medidores con
-// DATOS reales — latencia del último turno, amplitud de audio en vivo,
-// minutos de sesión y turnos. Flotan apenas (sin órbita completa: son
-// instrumentos, no adorno) y cada uno trae arco de valor + conector.
-function dibujarWidgets(t, c, amp) {
-  const lat = latencias.length ? latencias[latencias.length - 1] : 0;
-  const min = (Date.now() - inicio) / 60000;
-  const wdg = [
-    { a: -Math.PI / 4,     lbl: T().wdg.lat, val: lat ? lat.toFixed(1) + "s" : "—",
-      frac: Math.min(1, lat / 8) },
-    { a: -Math.PI * 3 / 4, lbl: T().wdg.aud, val: String(Math.round(amp * 99)).padStart(2, "0"),
-      frac: amp },
-    { a: Math.PI * 3 / 4,  lbl: T().wdg.ses, val: String(Math.floor(min)).padStart(2, "0") + "m",
-      frac: (min % 60) / 60 },
-    { a: Math.PI / 4,      lbl: T().wdg.trn, val: String(turnos).padStart(2, "0"),
-      frac: (turnos % 10) / 10 },
-  ];
-  ctx.textAlign = "center";
-  for (const w of wdg) {
-    const flot = Math.sin(t * .8 + w.a * 3) * 2.5;   // respiración de posición
-    const r = 184 + flot;
-    const x = CX + Math.cos(w.a) * r, y = CY + Math.sin(w.a) * r;
-    // conector radial al aro exterior
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = c.dim + ".25)";
-    ctx.beginPath();
-    ctx.moveTo(CX + Math.cos(w.a) * 150, CY + Math.sin(w.a) * 150);
-    ctx.lineTo(CX + Math.cos(w.a) * (r - 17), CY + Math.sin(w.a) * (r - 17));
-    ctx.stroke();
-    // aro base + arco de valor (arranca arriba, estilo gauge)
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = c.dim + ".18)";
-    ctx.beginPath(); ctx.arc(x, y, 15, 0, 7); ctx.stroke();
-    ctx.strokeStyle = c.dim + (.6 + amp * .3) + ")";
-    ctx.beginPath();
-    ctx.arc(x, y, 15, -Math.PI / 2, -Math.PI / 2 + Math.max(.04, w.frac) * 2 * Math.PI);
-    ctx.stroke();
-    // valor adentro, etiqueta afuera
-    ctx.font = "9px 'Share Tech Mono', monospace";
-    ctx.fillStyle = c.dim + ".85)";
-    ctx.fillText(w.val, x, y + 3);
-    ctx.font = "7px 'Share Tech Mono', monospace";
-    ctx.fillStyle = c.dim + ".45)";
-    ctx.fillText(w.lbl, x, y + 27);
-  }
+// capa instrumento (short, still t10.3): arcos blancos finos con gaps
+// girando en contra, hairlines horizontales que cruzan el canvas, y la hora
+// gigante ultra-light — la jerarquía de luz real: teal susurrado para la
+// máquina, BLANCO solo para lo que informa. Datos 100% reales.
+let climaTxt = "—";
+function dibujarInstrumento(t, amp, fase) {
+  const W = "rgba(240,252,249,";
+  // arcos cronómetro
+  ctx.lineWidth = 1.2;
+  ctx.strokeStyle = W + ".38)";
+  const a1 = t * .45;
+  ctx.beginPath(); ctx.arc(CX, CY, R * .42, a1, a1 + 5.0); ctx.stroke();
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = W + ".26)";
+  const a2 = -t * .3 + 1.2;
+  ctx.beginPath(); ctx.arc(CX, CY, R * .475, a2, a2 + .85); ctx.stroke();
+  ctx.beginPath(); ctx.arc(CX, CY, R * .475, a2 + 2.7, a2 + 3.05); ctx.stroke();
+  // hairlines horizontales
+  const y1 = CY - R * .135, y2 = CY + R * .145;
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = W + ".13)";
+  ctx.beginPath();
+  ctx.moveTo(0, y1); ctx.lineTo(S, y1);
+  ctx.moveTo(CX - R * .6, y2); ctx.lineTo(S, y2);
+  ctx.stroke();
+  if (!document.body.classList.contains("hud")) return;  // consola: sin hora
+  if (letras) return;  // mientras J.A.R.V.I.S. se materializa, el centro es suyo
+  // la hora del short: gigante, peso 200 — se atenúa cuando jarvis está en algo
+  const d = new Date();
+  const quieto = fase === "listo" && !sonando && !ocupado;
+  const al = quieto ? .88 : .22;
+  const txt = String(d.getHours()).padStart(2, "0") + ":" +
+              String(d.getMinutes()).padStart(2, "0");
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.font = "200 " + Math.round(R * .27) + "px Rajdhani, sans-serif";
+  ctx.fillStyle = W + al + ")";
+  ctx.fillText(txt, CX, CY);
+  const mitad = ctx.measureText(txt).width / 2;
+  ctx.textAlign = "left";
+  ctx.font = "300 " + Math.round(R * .07) + "px Rajdhani, sans-serif";
+  ctx.fillStyle = W + al * .7 + ")";
+  ctx.fillText(":" + String(d.getSeconds()).padStart(2, "0"),
+               CX + mitad + R * .025, CY + R * .07);
+  // puntas de la hairline: clima y latencia/turnos, chiquitos
+  ctx.font = Math.max(8, Math.round(R * .042)) + "px 'Share Tech Mono', monospace";
+  ctx.fillStyle = W + ".45)";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillText(climaTxt, 6, y1 - R * .035);
+  ctx.textAlign = "right";
+  const lat = latencias.length ? latencias[latencias.length - 1].toFixed(1) + "s" : "—";
+  ctx.fillText("LAT " + lat + " · T" + String(turnos).padStart(2, "0"), S - 6, y1 - R * .035);
   ctx.textAlign = "left";
 }
 
@@ -1175,9 +1291,9 @@ function dibujarParticulas() {
   // nodos titilan. Costo cero en idle: si no hay señal, no se dibuja nada.
   // Un solo path para todas las líneas — sin shadowBlur, la regla de siempre.
   if (nivelSuave > .02) {
-    const paso = 44, al = Math.min(.12, nivelSuave * .14);
+    const paso = 44, al = Math.min(.06, nivelSuave * .08);  // más tenue (sesión 42)
     pCtx.lineWidth = 1;
-    pCtx.strokeStyle = `rgba(79,216,235,${al})`;
+    pCtx.strokeStyle = `rgba(111,202,187,${al})`;
     pCtx.beginPath();
     for (let x = .5; x <= innerWidth; x += paso) {
       pCtx.moveTo(x, 0); pCtx.lineTo(x, innerHeight);
@@ -1188,7 +1304,7 @@ function dibujarParticulas() {
     pCtx.stroke();
     // nodos: cruces en intersecciones que parpadean fuera de fase — la
     // retícula procesa, no solo existe
-    pCtx.fillStyle = `rgba(155,232,242,${Math.min(.5, nivelSuave * .6)})`;
+    pCtx.fillStyle = `rgba(214,255,246,${Math.min(.5, nivelSuave * .6)})`;
     for (let x = paso * 2; x < innerWidth; x += paso * 4)
       for (let y = paso * 2; y < innerHeight; y += paso * 3) {
         if (Math.sin(t * 7 + x * .13 + y * .29) > .55) {
@@ -1203,90 +1319,9 @@ function dibujarParticulas() {
     if (p.y < -4) { p.y = innerHeight + 4; p.x = Math.random() * innerWidth; }
     if (p.x < -4) p.x = innerWidth + 4;
     else if (p.x > innerWidth + 4) p.x = -4;
-    pCtx.fillStyle = `rgba(79,216,235,${p.o * (1 + nivelSuave * .8)})`;
+    pCtx.fillStyle = `rgba(111,202,187,${p.o * (1 + nivelSuave * .8)})`;
     pCtx.beginPath(); pCtx.arc(p.x, p.y, p.r, 0, 7); pCtx.fill();
   }
-}
-
-// ── Paneles FUI laterales (modo HUD): decorativos pero con datos reales ──
-function prepararPanel(sel) {
-  const cv = $(sel), c2 = cv.getContext("2d");
-  const w = cv.width, h = cv.height;
-  cv.width = w * DPR; cv.height = h * DPR;
-  cv.style.width = w + "px"; cv.style.height = h + "px";
-  c2.scale(DPR, DPR);
-  return [c2, w, h];
-}
-const [pzCtx, PZW, PZH] = prepararPanel("#panelIzq");
-const [pdCtx, PDW, PDH] = prepararPanel("#panelDer");
-
-function marcoPanel(c2, w, h, titulo) {
-  c2.clearRect(0, 0, w, h);
-  c2.strokeStyle = "rgba(79,216,235,.3)"; c2.lineWidth = 1;
-  // esquinas tipo bracket
-  const L = 14;
-  [[0,0,L,0,0,L],[w,0,w-L,0,w,L],[0,h,L,h,0,h-L],[w,h,w-L,h,w,h-L]].forEach(([x,y,x2,y2,x3,y3]) => {
-    c2.beginPath(); c2.moveTo(x2,y2); c2.lineTo(x,y); c2.lineTo(x3,y3); c2.stroke();
-  });
-  c2.font = "8px 'Share Tech Mono', monospace";
-  c2.fillStyle = "rgba(79,216,235,.5)";
-  c2.fillText(titulo, 10, 16);
-}
-
-function dibujarPaneles(t) {
-  if (!document.body.classList.contains("hud")) return;
-  const fase = faseActual();
-
-  // ── izquierda: espectro / actividad de audio ──
-  marcoPanel(pzCtx, PZW, PZH, T().panelAudio);
-  const nB = 14, bw = (PZW - 40) / nB;
-  for (let i = 0; i < nB; i++) {
-    let v;  // 0..1 por barra, según qué esté sonando de verdad
-    if (sonando)                 v = freqs[Math.floor(i * freqs.length / nB)] / 255;
-    else if (fase === "escuchando") v = Math.min(1, nivelMic * 16) * (.4 + .6 * Math.abs(Math.sin(t * 3 + i)));
-    else                         v = .06 + .05 * Math.sin(t * 1.2 + i * .9);
-    const bh = 4 + v * (PZH - 90);
-    pzCtx.fillStyle = `rgba(79,216,235,${.18 + v * .6})`;
-    pzCtx.fillRect(20 + i * bw, PZH - 40 - bh, bw - 3, bh);
-  }
-  pzCtx.fillStyle = "rgba(79,216,235,.45)";
-  pzCtx.fillText(sonando ? "TTS · ANDREW" : fase === "escuchando" ? (OIDOS_APPLE ? "MIC · APPLE" : "MIC · WHISPER") : "IDLE", 10, PZH - 14);
-
-  // ── derecha: telemetría del cerebro ──
-  marcoPanel(pdCtx, PDW, PDH, T().panelCerebro);
-  pdCtx.font = "26px 'Share Tech Mono', monospace";
-  pdCtx.fillStyle = "rgba(79,216,235,.85)";
-  pdCtx.fillText(String(turnos).padStart(2, "0"), 10, 52);
-  pdCtx.font = "8px 'Share Tech Mono', monospace";
-  pdCtx.fillStyle = "rgba(79,216,235,.5)";
-  pdCtx.fillText(T().turnosLbl, 10, 64);
-  pdCtx.fillText(T().latLbl, 10, 96);
-  // sparkline de latencias reales
-  if (latencias.length > 1) {
-    const max = Math.max(...latencias, 3);
-    pdCtx.strokeStyle = "rgba(79,216,235,.7)"; pdCtx.lineWidth = 1.4;
-    pdCtx.beginPath();
-    latencias.forEach((v, i) => {
-      const x = 10 + i * (PDW - 20) / 23;
-      const y = 170 - (v / max) * 62;
-      i ? pdCtx.lineTo(x, y) : pdCtx.moveTo(x, y);
-    });
-    pdCtx.stroke();
-  } else {
-    pdCtx.fillText(T().sinDatos, 10, 140);
-  }
-  // anillo de sesión (minutos, gira mientras corre)
-  const min = (Date.now() - inicio) / 60000;
-  pdCtx.strokeStyle = "rgba(79,216,235,.25)"; pdCtx.lineWidth = 3;
-  pdCtx.beginPath(); pdCtx.arc(PDW / 2, PDH - 70, 26, 0, 7); pdCtx.stroke();
-  pdCtx.strokeStyle = "rgba(79,216,235,.8)";
-  pdCtx.beginPath();
-  pdCtx.arc(PDW / 2, PDH - 70, 26, -Math.PI / 2, -Math.PI / 2 + (min % 60) / 60 * 2 * Math.PI);
-  pdCtx.stroke();
-  pdCtx.textAlign = "center";
-  pdCtx.fillText(T().sesionLbl, PDW / 2, PDH - 66);
-  pdCtx.textAlign = "left";
-  pdCtx.fillText(T().cerebroSub, 10, PDH - 14);
 }
 
 // ── Loop de render ───────────────────────────────────────────────────────
@@ -1308,13 +1343,17 @@ let frameAnterior = 0, framesLentos = 0, fpsGap = 15; // 15ms ≈ 60fps; 33 ≈ 
   const t = now / 1000;
   dibujarReactor(t);
   dibujarParticulas();
-  dibujarPaneles(t);
 })();
+medirReactor();  // primer dimensionado (HUD o consola según el modo guardado)
 
 // ── Boot: el click desbloquea el audio del browser ───────────────────────
 $("#iniciar").onclick = () => {
   prepararAudio();
   $("#boot").classList.add("fuera");
+  // secuencia del short: las partículas convergen formando el toro (easing
+  // de servo) y "J.A.R.V.I.S." se materializa con el barrido L→R
+  ensamblar();
+  setTimeout(textoJarvis, 1500);
   const saludo = T().saludo(new Date().getHours());
   // intro estilo película (Iron Man 3 Second Screen) solo en el primer boot
   // del día; los demás boots usan el saludo corto para no cansar
