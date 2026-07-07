@@ -309,6 +309,7 @@ const L = {
              Grep: "buscando en el vault…", Glob: "buscando en el vault…",
              WebSearch: "buscando en la web…", WebFetch: "leyendo la web…" },
     panelTipos: { clima: "CLIMA", agenda: "HOY", vault: "VAULT", web: "WEB" },
+    filler: ["En eso estoy…", "Dame un segundo…", "Un momento…", "Ya casi lo tengo…"],
     boot: [["NÚCLEO", "EN LÍNEA"], ["MEMORIA", "VAULT MONTADO"], ["CEREBRO", "SONNET · SUSCRIPCIÓN"],
            ["OÍDOS", OIDOS_APPLE ? "APPLE · NEURAL ENGINE" : "WHISPER LOCAL"], ["VOZ", "ANDREW · EDGE-TTS"]],
     iniciar: "iniciar", tele: ["hora", "sesión", "turnos", "latencia", "clima"],
@@ -341,6 +342,7 @@ const L = {
     fases: { listo: "online", escuchando: "listening…", transcribiendo: "transcribing…",
              pensando: "processing…", hablando: "speaking" },
     panelTipos: { clima: "WEATHER", agenda: "TODAY", vault: "VAULT", web: "WEB" },
+    filler: ["Working on it, sir…", "One moment, sir…", "On it…", "Almost there…"],
     manos: { Bash: "running an action…", Read: "reading the vault…",
              Grep: "searching the vault…", Glob: "searching the vault…",
              WebSearch: "searching the web…", WebFetch: "reading the web…" },
@@ -393,6 +395,7 @@ let faseAnimada = "listo";          // última fase dibujada → onda al cambiar
 
 // ── Audio: TTS en el browser, con analizador para animar el reactor ─────
 let actx = null, analizador = null, fuente = null, sonando = false;
+let ultimoFiller = 0;  // throttle del filler hablado durante las manos
 let alArrancarAudio = null;  // hook: turno() lo usa para soltar el texto justo cuando suena la voz
 const cola = [];          // promesas de ArrayBuffer, en orden de oración
 const freqs = new Uint8Array(64);
@@ -677,6 +680,15 @@ async function turno(texto, briefing = false) {
           manoActiva = ev.texto;  // se guarda la CLAVE: el texto sale de T()
           $("#fase").textContent = T().manos[manoActiva] || T().manos.Bash;
           msg("sys", "⚙ " + (T().manos[manoActiva] || T().manos.Bash));
+          // filler hablado: si la voz está callada mientras trabaja la mano,
+          // jarvis murmura algo — el silencio de una búsqueda larga es
+          // anti-película (la regla "anunciar antes de ejecutar" del prompt
+          // depende del cerebro; esto es la garantía determinística)
+          if (!sonando && !cola.length && Date.now() - ultimoFiller > 8000) {
+            ultimoFiller = Date.now();
+            const f = T().filler;
+            decir(f[Math.floor(Math.random() * f.length)]);
+          }
         }
         else if (ev.tipo === "oracion") decir(ev.texto);
         else if (ev.tipo === "fin") {
