@@ -95,10 +95,11 @@
      encogiéndose a su chip del dock inferior. Click en la tarjeta = mandarla
      al dock; click en el chip = traerla de vuelta. El server sigue mandando
      los mismos paneles; solo cambió cómo se presentan. */
-  #sitCentro { position: fixed; left: 50%; top: 43%; transform: translate(-50%,-50%);
-    z-index: 5; width: min(470px, 78vw); display: flex; flex-direction: column;
+  /* al COSTADO izquierdo del toro (pedido de Charles: que no tapen a Jarvis) */
+  #sitCentro { position: fixed; left: 26px; top: 50%; transform: translateY(-50%);
+    z-index: 5; width: min(330px, 24vw); display: flex; flex-direction: column;
     gap: 10px; pointer-events: none; }
-  body:not(.hud) #sitCentro, body:not(.hud) #sitDock { display: none; }
+  body:not(.hud) #sitCentro, body:not(.hud) #dock { display: none; }
   .sitG { pointer-events: auto; cursor: pointer; position: relative;
     background: rgba(3,14,12,.66); border: 1px solid rgba(234,255,249,.22);
     padding: 13px 18px 11px; font: 13px 'Share Tech Mono', monospace;
@@ -114,17 +115,43 @@
   .psitL { color: #dffef6; white-space: nowrap; overflow: hidden;
     text-overflow: ellipsis; line-height: 1.6; }
   .sitG.fuera, .chip.fuera { animation: psitOut .3s ease-in both; }
-  @keyframes sitIn {  /* se materializa desde el núcleo, con flare */
-    0%   { opacity: 0; transform: scale(.5); filter: brightness(2.4); }
+  @keyframes sitIn {  /* se materializa con flare y se asienta */
+    0%   { opacity: 0; transform: translateX(-26px) scale(.88); filter: brightness(2.4); }
     60%  { opacity: 1; filter: brightness(1.25); }
-    100% { opacity: 1; transform: scale(1); filter: none; }
+    100% { opacity: 1; transform: none; filter: none; }
   }
   @keyframes psitScan { to { transform: translateY(100%); } }
   @keyframes psitOut {
     to { opacity: 0; transform: scale(.94); filter: brightness(1.6); }
   }
-  #sitDock { position: fixed; left: 50%; bottom: 12px; transform: translateX(-50%);
-    display: flex; gap: 10px; z-index: 5; }
+  /* ── Dock de acciones (HUD): notificaciones · manos libres · visión ──
+     La barra del short (mic al centro, elevado). Los chips de paneles
+     anclados viven arriba de la barra; la campana los muestra/oculta. */
+  #dock { position: fixed; right: 22px; bottom: 108px;
+    display: flex; flex-direction: column; align-items: flex-end; gap: 9px;
+    z-index: 5; }
+  #sitDock { display: flex; gap: 10px; }
+  #sitDock.oculto { display: none; }
+  #dockBar { display: flex; align-items: flex-end; gap: 30px; padding: 7px 30px 8px;
+    border: 1px solid rgba(111,202,187,.24); background: rgba(4,16,14,.6);
+    backdrop-filter: blur(3px); }
+  .dk { position: relative; background: none; border: none; padding: 4px;
+    color: rgba(214,255,246,.55); cursor: pointer; transition: color .2s; }
+  .dk:hover { color: var(--cyan-hi); background: none; box-shadow: none;
+    text-shadow: none; }
+  .dk svg { width: 21px; height: 21px; fill: none; stroke: currentColor;
+    stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round;
+    display: block; }
+  .dkMic { margin: -26px 0 2px; width: 54px; height: 54px; border-radius: 50%;
+    border: 1px solid rgba(111,202,187,.4); background: rgba(4,16,14,.88);
+    display: flex; align-items: center; justify-content: center; }
+  .dkMic svg { width: 27px; height: 27px; }
+  .dkMic.activo { color: var(--ambar); border-color: rgba(235,181,79,.55);
+    box-shadow: 0 0 18px rgba(235,181,79,.25); }
+  #dkBadge { position: absolute; top: -1px; right: -3px; min-width: 13px;
+    height: 13px; border-radius: 7px; background: rgba(235,181,79,.9);
+    color: #05080d; font: 9px/13px 'Share Tech Mono', monospace;
+    padding: 0 3px; display: none; }
   .chip { cursor: pointer; font: 9px 'Share Tech Mono', monospace;
     letter-spacing: 2.5px; color: rgba(234,255,249,.72);
     border: 1px solid rgba(111,202,187,.35); border-top-width: 2px;
@@ -132,7 +159,7 @@
     animation: chipIn .25s ease-out both; }
   .chip:hover { background: rgba(111,202,187,.14); color: var(--cyan-hi); }
   @keyframes chipIn { from { opacity: 0; transform: translateY(8px); } }
-  @media (max-width: 860px) { #sitCentro, #sitDock { display: none; } }
+  @media (max-width: 860px) { #sitCentro, #dock { display: none; } }
 
   /* timers activos: countdown en vivo bajo el reactor */
   #timers { display: flex; gap: 10px; min-height: 24px; flex-wrap: wrap;
@@ -277,7 +304,21 @@
 
 <canvas id="particulas"></canvas>
 <div id="sitCentro"></div>
-<div id="sitDock"></div>
+<div id="dock">
+  <div id="sitDock"></div>
+  <div id="dockBar">
+    <button class="dk" id="dkNotif">
+      <svg viewBox="0 0 24 24"><path d="M6.2 16v-5.2a5.8 5.8 0 0 1 11.6 0V16l1.6 2.2H4.6L6.2 16z"/><path d="M10 20.6a2 2 0 0 0 4 0"/></svg>
+      <span id="dkBadge"></span>
+    </button>
+    <button class="dk dkMic" id="dkMic">
+      <svg viewBox="0 0 24 24"><rect x="9.2" y="3.4" width="5.6" height="9.6" rx="2.8"/><path d="M6.4 11.4a5.6 5.6 0 0 0 11.2 0M12 17.2v3.2M9.2 20.4h5.6"/><path d="M3.6 8.4a8.4 8.4 0 0 0 0 7.2M20.4 8.4a8.4 8.4 0 0 1 0 7.2"/></svg>
+    </button>
+    <button class="dk" id="dkVision">
+      <svg viewBox="0 0 24 24"><rect x="3" y="4.6" width="18" height="12.4" rx="1.5"/><path d="M9 20.4h6M12 17v3.4"/><path d="M6.4 10.8h2.8l1.4-2.4 2 4.6 1.4-2.2h3.6"/></svg>
+    </button>
+  </div>
+</div>
 
 <div id="boot">
   <div class="linea" style="animation-delay:.15s">&gt; NÚCLEO ............ <b>EN LÍNEA</b></div>
@@ -356,6 +397,8 @@ const L = {
     modoTitle: "alternar entre modo HUD (subtítulos) y modo consola (chat completo)",
     voz: libre => "voz · " + (libre ? "hey jarvis" : "click"),
     vozTitle: "manos libres: decí «hey jarvis» y hablá — sin clicks",
+    visionTitle: "visión: ¿qué hay en mi pantalla?",
+    notifTitle: "notificaciones ancladas — mostrar/ocultar",
     reactorTitle: "click: hablar / cortar / interrumpir",
     pistaClick: "click en el reactor para hablar · click de nuevo para cortar",
     pistaLibre: "decí «hey jarvis» y hablá — click en el reactor solo para interrumpir",
@@ -391,6 +434,8 @@ const L = {
     modoTitle: "toggle between HUD mode (subtitles) and console mode (full chat)",
     voz: libre => "voice · " + (libre ? "hey jarvis" : "click"),
     vozTitle: "hands-free: say «hey jarvis» and talk — no clicks",
+    visionTitle: "vision: what's on my screen?",
+    notifTitle: "docked notifications — show/hide",
     reactorTitle: "click: talk / stop / interrupt",
     pistaClick: "click the reactor to talk · click again to stop",
     pistaLibre: "say «hey jarvis» and talk — click the reactor only to interrupt",
@@ -593,6 +638,9 @@ function aplicarIdioma() {
   $("#modo").textContent = t.modo(document.body.classList.contains("hud") ? "hud" : "consola");
   $("#voz").title = t.vozTitle;
   $("#voz").textContent = t.voz(manosLibres);
+  $("#dkMic").title = t.vozTitle;
+  $("#dkVision").title = t.visionTitle;
+  $("#dkNotif").title = t.notifTitle;
   $("#reactor").title = t.reactorTitle;
   $("#pista").textContent = manosLibres ? t.pistaLibre : t.pistaClick;
   $("#entrada").placeholder = t.placeholder;
@@ -846,6 +894,7 @@ function aDock(id) {
    .onfinish = () => grande.remove();
   chip.animate([{ opacity: 0 }, { opacity: 0, offset: .75 }, { opacity: 1 }],
                { duration: 560 });
+  ponerBadge();
   try { bip(740, 0.05); } catch {}      // "aterrizó en el dock"
 }
 
@@ -859,6 +908,7 @@ function alCentro(id) {
   info.donde = "centro";
   info.nodo = sitGrande(info.panel);
   info.timer = setTimeout(() => aDock(id), 6000);
+  ponerBadge();
   try { bip(1567, 0.05); } catch {}
 }
 
@@ -870,6 +920,7 @@ function pintarPaneles(lista) {
       sitInfo.delete(id); clearTimeout(info.timer);
       info.nodo.classList.add("fuera");
       setTimeout(nodo => nodo.remove(), 320, info.nodo);
+      ponerBadge();
     }
   }
   for (const p of lista) {
@@ -951,16 +1002,41 @@ async function ponerVoz(libre) {
   } catch { manosLibres = false; }
   $("#voz").textContent = T().voz(manosLibres);
   $("#voz").classList.toggle("libre", manosLibres);
+  $("#dkMic").classList.toggle("activo", manosLibres);  // el mic del dock, en ámbar
   $("#pista").textContent = manosLibres ? T().pistaLibre : T().pistaClick;
   localStorage.setItem("jarvis-voz", manosLibres ? "libre" : "click");
 }
-$("#voz").onclick = async () => {
+async function toggleManosLibres() {
   const pedido = !manosLibres;
   await ponerVoz(pedido);
   // anuncio hablado estilo película (pedido de Charles, inspo del video):
   // solo en el click del usuario — el resync automático no lo repite
   if (manosLibres === pedido) decir(pedido ? T().manosOn : T().manosOff);
+}
+$("#voz").onclick = toggleManosLibres;
+
+// ── Dock de acciones (HUD, sesión 42b): mic = manos libres (como el short),
+//    monitor = visión de pantalla (dispara el turno por vos), campana =
+//    mostrar/ocultar los chips anclados ──────────────────────────────────
+$("#dkMic").onclick = toggleManosLibres;
+$("#dkVision").onclick = () => {
+  if (ocupado || grabando || sonando) return;
+  ondas.push(performance.now());
+  try { bip(1046, .07); } catch {}
+  turno(idioma === "en" ? "jarvis, what's on my screen right now?"
+                        : "jarvis, ¿qué hay en mi pantalla ahora?");
 };
+$("#dkNotif").onclick = () => {
+  $("#sitDock").classList.toggle("oculto");
+  try { bip(880, .05); } catch {}
+};
+function ponerBadge() {
+  let n = 0;
+  for (const info of sitInfo.values()) if (info.donde === "dock") n++;
+  const b = $("#dkBadge");
+  b.style.display = n ? "block" : "none";
+  b.textContent = n;
+}
 // restaurar manos libres apenas carga la página (también con ?sin-boot):
 // el oído es del servidor, no necesita el click que desbloquea el audio
 if (localStorage.getItem("jarvis-voz") === "libre") ponerVoz(true);
@@ -1035,14 +1111,17 @@ const ESF_N = 96, esfP = [], esfE = [];
 }
 
 let flare = 0;      // el aro se aviva en cada transición y se asienta (short)
+let proxFlare = 0;  // próximo micro-flare idle
 let ensT0 = 0;      // ensamblaje de boot: las partículas convergen al aro
 let letras = null;  // texto JARVIS en partículas (boot)
 
 function ensamblar() {
   ensT0 = performance.now();
+  // el short (re-análisis 12fps, sesión 42b): el aro NACE chico en el centro
+  // y se INFLA con overshoot — no converge desde afuera
   for (const p of toro) {
-    p.ex = CX + (Math.random() - .5) * S * 1.9;
-    p.ey = CY + (Math.random() - .5) * S * 1.9;
+    p.ex = CX + Math.cos(p.a) * R * (.06 + p.j * .12);
+    p.ey = CY + Math.sin(p.a) * R * (.06 + p.j * .12);
   }
 }
 // easing de servo del short: acelera, se pasa un pelo y se asienta
@@ -1081,6 +1160,12 @@ function dibujarReactor(t) {
     ondas.push(performance.now());
     flare = 1;
   }
+  // micro-flare periódico en idle: la máquina computa aunque nadie hable
+  // (re-análisis 12fps: el aro del short se aviva solo cada 3-5s)
+  if (t > proxFlare) {
+    flare = Math.max(flare, .32);
+    proxFlare = t + 2.8 + Math.random() * 3.5;
+  }
   flare *= fpsGap === 15 ? .955 : .912;
   // amplitud: la voz de jarvis (analizador) o TU voz (nivel del mic, servidor)
   const objetivo = sonando ? nivelAudio()
@@ -1117,10 +1202,14 @@ function dibujarReactor(t) {
     ctx.fillRect(px[i] - .7, py[i] - .7, 1.5, 1.5);
   }
   ctx.globalAlpha = 1;
-  // anillos grabados casi invisibles alrededor del núcleo
-  ctx.strokeStyle = c.dim + ".07)";
+  // anillos grabados tipo mandala alrededor del núcleo (re-análisis 12fps:
+  // se ven al quedar el centro vacío) — punteados, contra-girando
+  ctx.strokeStyle = c.dim + ".09)";
+  ctx.setLineDash([2, 6]); ctx.lineDashOffset = t * 6;
   ctx.beginPath(); ctx.arc(CX, CY, rE * 1.38, 0, 7); ctx.stroke();
+  ctx.setLineDash([6, 12]); ctx.lineDashOffset = -t * 9;
   ctx.beginPath(); ctx.arc(CX, CY, rE * 1.62, 0, 7); ctx.stroke();
+  ctx.setLineDash([]);
   // aliento del núcleo: respira con la voz (gradiente barato, sin shadowBlur)
   const rB = rE * (.85 + amp * .55);
   const bloom = ctx.createRadialGradient(CX, CY, 0, CX, CY, rB);
@@ -1142,7 +1231,7 @@ function dibujarReactor(t) {
     ctx.fillStyle = cols[b];
     for (const p of toro) {
       if (p.cb !== b) continue;
-      const a = p.a + t * p.s;
+      const a = p.a + t * (p.s + .022);   // deriva común: el aro entero rota lento
       const w = Math.sin(t * p.w1 + p.f1 + a * 2.3) + .5 * Math.sin(t * p.w2 + p.f2);
       const rr = R0 + p.rof * banda + w * turb * .55;
       let x = CX + Math.cos(a) * rr;
@@ -1169,11 +1258,17 @@ function dibujarReactor(t) {
     else {
       ctx.fillStyle = "#eafff9";
       const x0 = CX - letras.w / 2;
+      // el texto CRECE mientras se forma (servo) y ondula con scanline glitch
+      // durante el hold — los dos rasgos del re-análisis 12fps
+      const ks = .8 + .2 * eBack(Math.min(1, e / 700));
       for (const q of letras.pts) {
         const dIn = ((q.x - x0) / letras.w) * DIN * .72 + q.j * 230;
         if (e < dIn) continue;
         const k = Math.min(1, (e - dIn) / 240);
         let x = q.x + q.dx * (1 - k), y = q.y + q.dy * (1 - k);
+        x = CX + (x - CX) * ks; y = CY + (y - CY) * ks;
+        if (e < DIN + HOLD)
+          x += Math.sin(q.y * .33 + e * .012) * 2.2 * Math.min(1, e / 900);
         let al = k * (.35 + q.j * .6);
         if (e > DIN + HOLD) {
           const ko = (e - DIN - HOLD) / OUT;
@@ -1211,6 +1306,7 @@ function dibujarReactor(t) {
 // gigante ultra-light — la jerarquía de luz real: teal susurrado para la
 // máquina, BLANCO solo para lo que informa. Datos 100% reales.
 let climaTxt = "—";
+let horaEvento = 0, minutoPrev = -1;   // la hora como evento, no como mueble
 function dibujarInstrumento(t, amp, fase) {
   const W = "rgba(240,252,249,";
   // arcos cronómetro
@@ -1231,33 +1327,45 @@ function dibujarInstrumento(t, amp, fase) {
   ctx.moveTo(0, y1); ctx.lineTo(S, y1);
   ctx.moveTo(CX - R * .6, y2); ctx.lineTo(S, y2);
   ctx.stroke();
-  if (!document.body.classList.contains("hud")) return;  // consola: sin hora
-  if (letras) return;  // mientras J.A.R.V.I.S. se materializa, el centro es suyo
-  // la hora del short: gigante, peso 200 — se atenúa cuando jarvis está en algo
-  const d = new Date();
-  const quieto = fase === "listo" && !sonando && !ocupado;
-  const al = quieto ? .88 : .22;
-  const txt = String(d.getHours()).padStart(2, "0") + ":" +
-              String(d.getMinutes()).padStart(2, "0");
-  ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  ctx.font = "200 " + Math.round(R * .27) + "px Rajdhani, sans-serif";
-  ctx.fillStyle = W + al + ")";
-  ctx.fillText(txt, CX, CY);
-  const mitad = ctx.measureText(txt).width / 2;
-  ctx.textAlign = "left";
-  ctx.font = "300 " + Math.round(R * .07) + "px Rajdhani, sans-serif";
-  ctx.fillStyle = W + al * .7 + ")";
-  ctx.fillText(":" + String(d.getSeconds()).padStart(2, "0"),
-               CX + mitad + R * .025, CY + R * .07);
-  // puntas de la hairline: clima y latencia/turnos, chiquitos
+  if (!document.body.classList.contains("hud")) return;  // consola: sin extras
+  // puntas de la hairline: clima y latencia/turnos, chiquitos (siempre)
   ctx.font = Math.max(8, Math.round(R * .042)) + "px 'Share Tech Mono', monospace";
   ctx.fillStyle = W + ".45)";
-  ctx.textBaseline = "alphabetic";
+  ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
   ctx.fillText(climaTxt, 6, y1 - R * .035);
   ctx.textAlign = "right";
   const lat = latencias.length ? latencias[latencias.length - 1].toFixed(1) + "s" : "—";
   ctx.fillText("LAT " + lat + " · T" + String(turnos).padStart(2, "0"), S - 6, y1 - R * .035);
   ctx.textAlign = "left";
+  // la hora: EVENTO de ~2.6s al cambiar el minuto (y al abrir) — ya no vive
+  // fija al centro; se materializa, informa y se va (pedido de Charles +
+  // gramática del short: el contenido aparece cuando importa)
+  const d = new Date();
+  if (d.getMinutes() !== minutoPrev) {
+    minutoPrev = d.getMinutes();
+    horaEvento = performance.now();
+    flare = Math.max(flare, .4);              // el aro acusa el dato nuevo
+  }
+  const eh = performance.now() - horaEvento;
+  const HDUR = 2600;
+  if (letras || eh > HDUR) return;            // el centro queda para la esfera
+  const kin = Math.min(1, eh / 260);
+  const kout = eh > HDUR - 550 ? Math.max(0, (HDUR - eh) / 550) : 1;
+  const al = .9 * kin * kout * (sonando || ocupado || fase !== "listo" ? .3 : 1);
+  const dy = (1 - kin) * R * .05;             // entra deslizándose apenas
+  const txt = String(d.getHours()).padStart(2, "0") + ":" +
+              String(d.getMinutes()).padStart(2, "0");
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.font = "200 " + Math.round(R * .27) + "px Rajdhani, sans-serif";
+  ctx.fillStyle = W + al + ")";
+  ctx.fillText(txt, CX, CY + dy);
+  const mitad = ctx.measureText(txt).width / 2;
+  ctx.textAlign = "left";
+  ctx.font = "300 " + Math.round(R * .07) + "px Rajdhani, sans-serif";
+  ctx.fillStyle = W + al * .7 + ")";
+  ctx.fillText(":" + String(d.getSeconds()).padStart(2, "0"),
+               CX + mitad + R * .025, CY + dy + R * .07);
+  ctx.textBaseline = "alphabetic";
 }
 
 // ── Partículas de fondo ──────────────────────────────────────────────────
