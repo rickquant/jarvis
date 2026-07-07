@@ -310,6 +310,8 @@ const L = {
              WebSearch: "buscando en la web…", WebFetch: "leyendo la web…" },
     panelTipos: { clima: "CLIMA", agenda: "HOY", vault: "VAULT", web: "WEB" },
     filler: ["En eso estoy…", "Dame un segundo…", "Un momento…", "Ya casi lo tengo…"],
+    manosOn: "Modo manos libres activado. Decí mi nombre y hablá, Charles.",
+    manosOff: "Manos libres desactivado. Volvemos al click.",
     boot: [["NÚCLEO", "EN LÍNEA"], ["MEMORIA", "VAULT MONTADO"], ["CEREBRO", "SONNET · SUSCRIPCIÓN"],
            ["OÍDOS", OIDOS_APPLE ? "APPLE · NEURAL ENGINE" : "WHISPER LOCAL"], ["VOZ", "ANDREW · EDGE-TTS"]],
     iniciar: "iniciar", tele: ["hora", "sesión", "turnos", "latencia", "clima"],
@@ -343,6 +345,8 @@ const L = {
              pensando: "processing…", hablando: "speaking" },
     panelTipos: { clima: "WEATHER", agenda: "TODAY", vault: "VAULT", web: "WEB" },
     filler: ["Working on it, sir…", "One moment, sir…", "On it…", "Almost there…"],
+    manosOn: "Hands-free mode engaged. Say my name and speak, sir.",
+    manosOff: "Hands-free mode disengaged. Back to click.",
     manos: { Bash: "running an action…", Read: "reading the vault…",
              Grep: "searching the vault…", Glob: "searching the vault…",
              WebSearch: "searching the web…", WebFetch: "reading the web…" },
@@ -863,7 +867,13 @@ async function ponerVoz(libre) {
   $("#pista").textContent = manosLibres ? T().pistaLibre : T().pistaClick;
   localStorage.setItem("jarvis-voz", manosLibres ? "libre" : "click");
 }
-$("#voz").onclick = () => ponerVoz(!manosLibres);
+$("#voz").onclick = async () => {
+  const pedido = !manosLibres;
+  await ponerVoz(pedido);
+  // anuncio hablado estilo película (pedido de Charles, inspo del video):
+  // solo en el click del usuario — el resync automático no lo repite
+  if (manosLibres === pedido) decir(pedido ? T().manosOn : T().manosOff);
+};
 // restaurar manos libres apenas carga la página (también con ?sin-boot):
 // el oído es del servidor, no necesita el click que desbloquea el audio
 if (localStorage.getItem("jarvis-voz") === "libre") ponerVoz(true);

@@ -41,6 +41,9 @@ MANOS_TOOLS = [
     "Bash(python3 manos.py:*)",  # menú fijo: cerrar apps, música, volumen, nota, hora
     "Read", "Grep", "Glob",      # buscar y leer en el vault (su memoria real)
     "WebSearch", "WebFetch",     # internet, solo lectura (buscar / leer una URL)
+    # visión: screenshot a UN archivo fijo (el prefijo clava el nombre — no
+    # puede capturar a rutas arbitrarias); .pantalla.png está en .gitignore
+    "Bash(screencapture -x .pantalla.png:*)",
 ]
 
 MANOS = f"""\
@@ -67,6 +70,11 @@ Tenés manos, pero limitadas. Podés usar EXACTAMENTE esto y nada más:
    precios, "buscame X") y WebFetch para leer una URL concreta. Usalas
    cuando la respuesta necesite información fresca o externa; para audio,
    resumí lo encontrado en 2-3 frases, no leas párrafos enteros.
+10. VER LA PANTALLA: cuando Charles pregunte qué hay/qué se ve en su
+   pantalla, o pida ayuda con lo que está mirando: ejecutá EXACTAMENTE
+   `screencapture -x .pantalla.png` y después leé esa imagen con Read
+   (.pantalla.png en el directorio actual). Describí o analizá lo que
+   importa para su pregunta, no cada pixel. La captura es temporal.
 
 Si te preguntan qué podés hacer, esta lista es la respuesta (contala en
 una frase, sin numerarla).
