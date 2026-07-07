@@ -82,7 +82,7 @@
   #panelIzq { left: 5%; }
   #panelDer { right: 5%; }
   @media (max-width: 1100px) { .panel { display: none !important; } }
-  #reactor { width: 330px; height: 330px; max-width: 90%; cursor: pointer;
+  #reactor { width: 430px; height: 430px; max-width: 90%; cursor: pointer;
     filter: drop-shadow(0 0 24px rgba(79,216,235,.18)); }
   #fase {
     font-family: var(--mono); font-size: 12px; letter-spacing: 6px;
@@ -209,6 +209,35 @@
   #voz.libre { color: var(--ambar); border-color: rgba(235,181,79,.4);
     text-shadow: 0 0 8px rgba(235,181,79,.5); }
 
+  /* ── Transición de modo: la interfaz se RECONFIGURA (look Marvel) ──
+     Al togglear HUD↔consola: barrido de scanline a pantalla completa y los
+     dos lados se re-materializan (glitch + clip-path). Solo en el click del
+     usuario — la clase se quita sola al terminar. */
+  body.reconfig::before {
+    content: ""; position: fixed; inset: 0; z-index: 6; pointer-events: none;
+    background: linear-gradient(180deg, transparent, rgba(155,232,242,.14), transparent)
+                50% -30% / 100% 30% no-repeat;
+    animation: reconfScan .55s ease-out forwards;
+  }
+  @keyframes reconfScan { to { background-position: 50% 130%; } }
+  body.reconfig #ladoReactor {
+    animation: reconfLado .55s cubic-bezier(.2,.9,.25,1);
+  }
+  body.reconfig #ladoChat {
+    animation: reconfChat .55s cubic-bezier(.2,.9,.25,1);
+  }
+  @keyframes reconfLado {
+    0%   { opacity: .35; transform: scale(.965); filter: brightness(1.7); }
+    38%  { transform: scale(.985) translateX(-3px); }
+    52%  { transform: scale(.985) translateX(3px); filter: brightness(1.15); }
+    100% { opacity: 1; transform: none; filter: none; }
+  }
+  @keyframes reconfChat {
+    0%   { opacity: 0; transform: translateY(14px); clip-path: inset(0 0 100% 0); }
+    60%  { clip-path: inset(0 0 0 0); }
+    100% { opacity: 1; transform: none; clip-path: inset(0 0 0 0); }
+  }
+
   /* ── Boot ── */
   #boot {
     position: fixed; inset: 0; z-index: 10; background: var(--bg);
@@ -269,7 +298,7 @@
 
 <div id="main">
   <div id="ladoReactor">
-    <canvas id="reactor" width="330" height="330" title="click: hablar / cortar / interrumpir"></canvas>
+    <canvas id="reactor" width="430" height="430" title="click: hablar / cortar / interrumpir"></canvas>
     <div id="fase">en línea</div>
     <div id="pista">click en el reactor para hablar · click de nuevo para cortar</div>
     <div id="timers"></div>
@@ -331,6 +360,7 @@ const L = {
     panelAudio: "AUDIO // ESPECTRO", panelCerebro: "CEREBRO // TELEMETRÍA",
     turnosLbl: "TURNOS", latLbl: "LATENCIA / TURNO (s)", sinDatos: "— sin datos aún —",
     sesionLbl: "SESIÓN", cerebroSub: "SONNET · SUSCRIPCIÓN",
+    wdg: { lat: "LAT", aud: "AUD", ses: "SES", trn: "TRN" },
     saludo: h => h < 12 ? "Buenos días" : h < 19 ? "Buenas tardes" : "Buenas noches",
     corto: s => `${s}, Charles. Sistemas en línea.`,
     intro: s => [`${s}, Charles.`,
@@ -369,6 +399,7 @@ const L = {
     panelAudio: "AUDIO // SPECTRUM", panelCerebro: "BRAIN // TELEMETRY",
     turnosLbl: "TURNS", latLbl: "LATENCY / TURN (s)", sinDatos: "— no data yet —",
     sesionLbl: "SESSION", cerebroSub: "SONNET · SUBSCRIPTION",
+    wdg: { lat: "LAT", aud: "AUD", ses: "SES", trn: "TRN" },
     saludo: h => h < 12 ? "Good morning" : h < 19 ? "Good afternoon" : "Good evening",
     corto: s => `${s}, Charles. Systems online.`,
     intro: s => [`${s}, Charles.`,
@@ -536,8 +567,17 @@ function ponerModo(m) {
   $("#modo").textContent = T().modo(m);
   localStorage.setItem("jarvis-modo", m);
 }
-$("#modo").onclick = () =>
+$("#modo").onclick = () => {
+  // transición de reconfiguración (look Marvel): scanline + glitch + onda
+  // en el reactor — solo en el click; la carga inicial entra sin teatro
+  document.body.classList.remove("reconfig");
+  void document.body.offsetWidth;  // reinicia la animación si clickea seguido
+  document.body.classList.add("reconfig");
+  setTimeout(() => document.body.classList.remove("reconfig"), 600);
+  ondas.push(performance.now());
+  try { bip(1046, .08); setTimeout(() => bip(1567, .06), 90); } catch {}
   ponerModo(document.body.classList.contains("hud") ? "consola" : "hud");
+};
 ponerModo(localStorage.getItem("jarvis-modo") || "hud");
 
 // ── Idioma es/en: reescribe todo lo estático; lo dinámico ya lee de T() ──
@@ -897,26 +937,39 @@ const lienzo = $("#reactor"), ctx = lienzo.getContext("2d");
 // (Neural Engine) hay headroom. Si el HUD no sostiene 60fps, el loop de
 // render se auto-degrada a 30 (ver abajo) — la nitidez no se sacrifica.
 const DPR = Math.min(window.devicePixelRatio || 1, 2);
-lienzo.width = 330 * DPR; lienzo.height = 330 * DPR;
+lienzo.width = 430 * DPR; lienzo.height = 430 * DPR;
 ctx.scale(DPR, DPR);
-const CX = 165, CY = 165;
+const CX = 215, CY = 215;
+
+// anillos cinéticos: la velocidad ya no salta al cambiar de fase — se INTEGRA
+// (ángulo acumulado) y hace easing hacia el objetivo, con un kick de
+// aceleración en cada transición: la turbina revoluciona y se asienta
+let velGiro = .18, anguloGiro = 0, tGiroPrev = 0;
 
 function dibujarReactor(t) {
   const fase = faseActual();
   const c = COLORES[fase] || COLORES.listo;
   // transición de fase: un anillo se expande al cambiar de estado (reusa el
   // sistema de ondas del click) — se VE cuando jarvis pasa a escuchar/pensar
-  if (fase !== faseAnimada) { faseAnimada = fase; ondas.push(performance.now()); }
+  if (fase !== faseAnimada) {
+    faseAnimada = fase;
+    ondas.push(performance.now());
+    velGiro += 2.2;  // kick cinético: los anillos revolucionan y decaen solos
+  }
   // amplitud: la voz de jarvis (analizador) o TU voz (nivel del mic, servidor)
   const objetivo = sonando ? nivelAudio()
                  : fase === "escuchando" ? Math.min(1, nivelMic * 16) : 0;
   // suavizado entre polls, proporcional al framerate real (60 o 30)
   nivelSuave += (objetivo - nivelSuave) * (fpsGap === 15 ? 0.16 : 0.3);
   const amp = nivelSuave;
-  ctx.clearRect(0, 0, 330, 330);
+  ctx.clearRect(0, 0, 430, 430);
 
-  // velocidad de giro según estado
+  // velocidad objetivo según estado; la real la persigue con easing y la voz
+  // le suma empuje — el giro respira con la amplitud, no queda constante
   const vel = { listo: .18, escuchando: .55, transcribiendo: 1.6, pensando: 1.6, hablando: .7 }[fase] || .18;
+  const dtG = Math.min(.06, Math.max(0, t - tGiroPrev)); tGiroPrev = t;
+  velGiro += (vel + amp * .9 - velGiro) * Math.min(1, dtG * 3.2);
+  anguloGiro += velGiro * dtG;
   const respiro = Math.sin(t * (fase === "listo" ? 1.1 : 3.4)) * .5 + .5;
 
   if (sonando && analizador) analizador.getByteFrequencyData(freqs);
@@ -932,20 +985,31 @@ function dibujarReactor(t) {
   ctx.fillStyle = grad;
   ctx.beginPath(); ctx.arc(CX, CY, rG, 0, 7); ctx.fill();
 
-  // anillo de bobinas (10 segmentos, gira)
+  // anillo de bobinas (10 segmentos, gira con el ángulo integrado; los
+  // segmentos se estiran con la voz — el anillo se siente vivo, no de reloj)
   ctx.lineWidth = 11;
+  const seg = .38 + respiro * .08 + amp * .16;
   for (let i = 0; i < 10; i++) {
-    const a = t * vel + i * Math.PI / 5;
+    const a = anguloGiro + i * Math.PI / 5;
     ctx.strokeStyle = c.dim + (.55 + respiro * .2) + ")";
-    ctx.beginPath(); ctx.arc(CX, CY, 66, a, a + .44); ctx.stroke();
+    ctx.beginPath(); ctx.arc(CX, CY, 66, a, a + seg); ctx.stroke();
   }
 
   // anillo punteado (contra-gira)
   ctx.lineWidth = 1.4;
   ctx.strokeStyle = c.dim + ".5)";
   ctx.setLineDash([2, 7]);
-  ctx.beginPath(); ctx.arc(CX, CY, 90, -t * vel * 1.6, -t * vel * 1.6 + 7); ctx.stroke();
+  ctx.beginPath(); ctx.arc(CX, CY, 90, -anguloGiro * 1.6, -anguloGiro * 1.6 + 7); ctx.stroke();
   ctx.setLineDash([]);
+
+  // triple arco fino (contra-gira lento): capa cinética extra entre bobinas
+  // y ticks — tres arcos desfasados 120° que se abren con la amplitud
+  ctx.lineWidth = 2;
+  for (let i = 0; i < 3; i++) {
+    const a = -anguloGiro * .55 + i * 2.094;
+    ctx.strokeStyle = c.dim + (.3 + amp * .35) + ")";
+    ctx.beginPath(); ctx.arc(CX, CY, 79, a, a + .6 + amp * .5); ctx.stroke();
+  }
 
   // anillo de marcas (72 ticks, las largas cada 6)
   for (let i = 0; i < 72; i++) {
@@ -1028,6 +1092,56 @@ function dibujarReactor(t) {
   halo.addColorStop(1, "transparent");
   ctx.fillStyle = halo;
   ctx.beginPath(); ctx.arc(CX, CY, rH + 18, 0, 7); ctx.fill();
+
+  dibujarWidgets(t, c, amp);
+}
+
+// widgets radiales orbitando el reactor (look Marvel): 4 medidores con
+// DATOS reales — latencia del último turno, amplitud de audio en vivo,
+// minutos de sesión y turnos. Flotan apenas (sin órbita completa: son
+// instrumentos, no adorno) y cada uno trae arco de valor + conector.
+function dibujarWidgets(t, c, amp) {
+  const lat = latencias.length ? latencias[latencias.length - 1] : 0;
+  const min = (Date.now() - inicio) / 60000;
+  const wdg = [
+    { a: -Math.PI / 4,     lbl: T().wdg.lat, val: lat ? lat.toFixed(1) + "s" : "—",
+      frac: Math.min(1, lat / 8) },
+    { a: -Math.PI * 3 / 4, lbl: T().wdg.aud, val: String(Math.round(amp * 99)).padStart(2, "0"),
+      frac: amp },
+    { a: Math.PI * 3 / 4,  lbl: T().wdg.ses, val: String(Math.floor(min)).padStart(2, "0") + "m",
+      frac: (min % 60) / 60 },
+    { a: Math.PI / 4,      lbl: T().wdg.trn, val: String(turnos).padStart(2, "0"),
+      frac: (turnos % 10) / 10 },
+  ];
+  ctx.textAlign = "center";
+  for (const w of wdg) {
+    const flot = Math.sin(t * .8 + w.a * 3) * 2.5;   // respiración de posición
+    const r = 184 + flot;
+    const x = CX + Math.cos(w.a) * r, y = CY + Math.sin(w.a) * r;
+    // conector radial al aro exterior
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = c.dim + ".25)";
+    ctx.beginPath();
+    ctx.moveTo(CX + Math.cos(w.a) * 150, CY + Math.sin(w.a) * 150);
+    ctx.lineTo(CX + Math.cos(w.a) * (r - 17), CY + Math.sin(w.a) * (r - 17));
+    ctx.stroke();
+    // aro base + arco de valor (arranca arriba, estilo gauge)
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = c.dim + ".18)";
+    ctx.beginPath(); ctx.arc(x, y, 15, 0, 7); ctx.stroke();
+    ctx.strokeStyle = c.dim + (.6 + amp * .3) + ")";
+    ctx.beginPath();
+    ctx.arc(x, y, 15, -Math.PI / 2, -Math.PI / 2 + Math.max(.04, w.frac) * 2 * Math.PI);
+    ctx.stroke();
+    // valor adentro, etiqueta afuera
+    ctx.font = "9px 'Share Tech Mono', monospace";
+    ctx.fillStyle = c.dim + ".85)";
+    ctx.fillText(w.val, x, y + 3);
+    ctx.font = "7px 'Share Tech Mono', monospace";
+    ctx.fillStyle = c.dim + ".45)";
+    ctx.fillText(w.lbl, x, y + 27);
+  }
+  ctx.textAlign = "left";
 }
 
 // ── Partículas de fondo ──────────────────────────────────────────────────
@@ -1055,6 +1169,34 @@ function dibujarParticulas() {
   const dt = fpsGap === 15 ? .5 : 1;               // velocidades calibradas a 30fps
   const empuje = (1 + nivelSuave * 1.6) * dt;
   const t = performance.now() / 1000;
+
+  // grid técnico reactivo (look Marvel): invisible en reposo — cuando hay
+  // voz (de jarvis o tuya), la retícula se enciende con la amplitud y sus
+  // nodos titilan. Costo cero en idle: si no hay señal, no se dibuja nada.
+  // Un solo path para todas las líneas — sin shadowBlur, la regla de siempre.
+  if (nivelSuave > .02) {
+    const paso = 44, al = Math.min(.12, nivelSuave * .14);
+    pCtx.lineWidth = 1;
+    pCtx.strokeStyle = `rgba(79,216,235,${al})`;
+    pCtx.beginPath();
+    for (let x = .5; x <= innerWidth; x += paso) {
+      pCtx.moveTo(x, 0); pCtx.lineTo(x, innerHeight);
+    }
+    for (let y = .5; y <= innerHeight; y += paso) {
+      pCtx.moveTo(0, y); pCtx.lineTo(innerWidth, y);
+    }
+    pCtx.stroke();
+    // nodos: cruces en intersecciones que parpadean fuera de fase — la
+    // retícula procesa, no solo existe
+    pCtx.fillStyle = `rgba(155,232,242,${Math.min(.5, nivelSuave * .6)})`;
+    for (let x = paso * 2; x < innerWidth; x += paso * 4)
+      for (let y = paso * 2; y < innerHeight; y += paso * 3) {
+        if (Math.sin(t * 7 + x * .13 + y * .29) > .55) {
+          pCtx.fillRect(x - 3, y - .5, 6, 1);
+          pCtx.fillRect(x - .5, y - 3, 1, 6);
+        }
+      }
+  }
   for (const p of particulas) {
     p.y -= p.v * empuje;
     p.x += Math.sin(t * .4 + p.f) * p.z * .25 * dt; // vaivén, más cerca = más ancho
