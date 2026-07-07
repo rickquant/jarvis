@@ -66,6 +66,16 @@
   .dato .v { font-family: var(--mono); font-size: 15px; color: var(--cyan);
     text-shadow: 0 0 8px rgba(111,202,187,.35); }
 
+  /* en HUD el header desaparece (los controles viven en el dock — Charles):
+     queda un filo de 7px arriba; llevá el mouse al borde y baja solo */
+  body.hud header {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 7;
+    transform: translateY(calc(-100% + 7px));
+    transition: transform .35s ease .12s;
+    background: rgba(4,16,14,.94);
+  }
+  body.hud header:hover, body.hud header:focus-within { transform: none; }
+
   /* ── Layout ── */
   #main {
     position: relative; z-index: 1; flex: 1; min-height: 0;
@@ -127,8 +137,8 @@
   /* ── Dock de acciones (HUD): notificaciones · manos libres · visión ──
      La barra del short (mic al centro, elevado). Los chips de paneles
      anclados viven arriba de la barra; la campana los muestra/oculta. */
-  #dock { position: fixed; right: 22px; bottom: 16px;
-    display: flex; flex-direction: column; align-items: flex-end; gap: 9px;
+  #dock { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%);
+    display: flex; flex-direction: column; align-items: center; gap: 9px;
     z-index: 5; }
   #sitDock { display: flex; gap: 10px; }  /* chips DEBAJO de la barra (Charles) */
   #sitDock.oculto { display: none; }
@@ -224,12 +234,12 @@
 
   /* ── Modo HUD: sin chat log, subtítulo efímero bajo el reactor ── */
   body.hud #main { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
-  body.hud #ladoReactor { border-right: none; }
+  body.hud #ladoReactor { border-right: none; padding-bottom: 118px; }  /* aire para el dock */
   /* el chat en HUD ya no vive fijo abajo (le quitaba lo cool — Charles):
      es un panel lateral derecho que se invoca desde el ícono del dock,
      con el log completo + input. Se desliza desde el borde. */
   body.hud #ladoChat {
-    position: fixed; top: 70px; right: 18px; bottom: 118px;
+    position: fixed; top: 16px; right: 18px; bottom: 16px;
     width: min(420px, 34vw); z-index: 6; padding: 6px 14px 12px;
     background: rgba(3,14,12,.74); border: 1px solid rgba(111,202,187,.26);
     backdrop-filter: blur(5px);
@@ -271,7 +281,7 @@
   body.reconfig #ladoReactor {
     animation: reconfLado .55s cubic-bezier(.2,.9,.25,1);
   }
-  body.reconfig #ladoChat {
+  body.reconfig:not(.hud) #ladoChat {   /* en HUD el panel es fixed: no teatro */
     animation: reconfChat .55s cubic-bezier(.2,.9,.25,1);
   }
   @keyframes reconfLado {
@@ -1096,7 +1106,7 @@ let S = 430, CX = 215, CY = 215, R = 198;   // lado, centro y radio del sistema
 function medirReactor() {
   const hud = document.body.classList.contains("hud");
   // rasgo 1 del short: el sistema domina el viewport (con aire alrededor)
-  S = hud ? Math.round(Math.min(innerHeight * .74, innerWidth * .58, 780))
+  S = hud ? Math.round(Math.min(innerHeight * .72, innerWidth * .58, 780))
           : Math.round(Math.min(380, innerWidth * .92));
   lienzo.width = S * DPR; lienzo.height = S * DPR;
   lienzo.style.width = S + "px"; lienzo.style.height = S + "px";
@@ -1142,6 +1152,9 @@ const ESF_N = 96, esfP = [], esfE = [];
 
 let flare = 0;      // el aro se aviva en cada transición y se asienta (short)
 let proxFlare = 0;  // próximo micro-flare idle
+// con el header oculto en HUD, la firma vuelve sola: J.A.R.V.I.S. se
+// re-materializa en partículas cada 3-6 min (mismo trato que la hora)
+let proxLetras = performance.now() + 150000;
 let ensT0 = 0;      // ensamblaje de boot: las partículas convergen al aro
 let letras = null;  // texto JARVIS en partículas (boot)
 
@@ -1195,6 +1208,13 @@ function dibujarReactor(t) {
   if (t > proxFlare) {
     flare = Math.max(flare, .32);
     proxFlare = t + 2.8 + Math.random() * 3.5;
+  }
+  // la firma periódica (solo en HUD, y nunca pisando otra materialización)
+  if (!letras && performance.now() > proxLetras
+      && document.body.classList.contains("hud")) {
+    textoJarvis();
+    flare = Math.max(flare, .6);
+    proxLetras = performance.now() + (180 + Math.random() * 180) * 1000;
   }
   flare *= fpsGap === 15 ? .955 : .912;
   // amplitud: la voz de jarvis (analizador) o TU voz (nivel del mic, servidor)
