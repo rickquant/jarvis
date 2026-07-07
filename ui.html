@@ -395,7 +395,7 @@ let faseAnimada = "listo";          // última fase dibujada → onda al cambiar
 
 // ── Audio: TTS en el browser, con analizador para animar el reactor ─────
 let actx = null, analizador = null, fuente = null, sonando = false;
-let ultimoFiller = 0;  // throttle del filler hablado durante las manos
+let ultimoFiller = 0, fillerTimer = null;  // filler hablado en esperas largas
 let alArrancarAudio = null;  // hook: turno() lo usa para soltar el texto justo cuando suena la voz
 const cola = [];          // promesas de ArrayBuffer, en orden de oración
 const freqs = new Uint8Array(64);
@@ -680,18 +680,22 @@ async function turno(texto, briefing = false) {
           manoActiva = ev.texto;  // se guarda la CLAVE: el texto sale de T()
           $("#fase").textContent = T().manos[manoActiva] || T().manos.Bash;
           msg("sys", "⚙ " + (T().manos[manoActiva] || T().manos.Bash));
-          // filler hablado: si la voz está callada mientras trabaja la mano,
-          // jarvis murmura algo — el silencio de una búsqueda larga es
-          // anti-película (la regla "anunciar antes de ejecutar" del prompt
-          // depende del cerebro; esto es la garantía determinística)
-          if (!sonando && !cola.length && Date.now() - ultimoFiller > 8000) {
-            ultimoFiller = Date.now();
-            const f = T().filler;
-            decir(f[Math.floor(Math.random() * f.length)]);
-          }
+          // filler hablado SOLO si la espera se alarga: ≥6s de silencio con
+          // la mano aún trabajando (pedido de Charles: si responde rápido,
+          // ni un ruido — el silencio corto es de película, el largo no)
+          clearTimeout(fillerTimer);
+          fillerTimer = setTimeout(() => {
+            if (ocupado && !sonando && !cola.length
+                && Date.now() - ultimoFiller > 12000) {
+              ultimoFiller = Date.now();
+              const f = T().filler;
+              decir(f[Math.floor(Math.random() * f.length)]);
+            }
+          }, 6000);
         }
         else if (ev.tipo === "oracion") decir(ev.texto);
         else if (ev.tipo === "fin") {
+          clearTimeout(fillerTimer);  // llegó la respuesta: el filler ya no va
           turnos++; $("#tTurnos").textContent = turnos;
           finTexto = ev.texto;               // el fin también espera a la voz
           if (revelado) burbuja.fin(ev.texto);
