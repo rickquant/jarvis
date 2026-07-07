@@ -161,6 +161,9 @@ def transcribir(audio: np.ndarray, idioma: str = "es") -> str:
 def _limpiar_para_voz(texto: str) -> str:
     """Por si el modelo mete markdown igual: se lee feo en voz alta."""
     texto = re.sub(r"[*_#`>|]+", "", texto)
+    # red de seguridad: si un URL se le escapa al prompt, la voz dice solo
+    # el dominio ("rockstargames.com"), nunca el https://... completo
+    texto = re.sub(r"https?://(?:www\.)?([^/\s)\]>,;]+)[^\s)\]>,;]*", r"\1", texto)
     for palabra, fonetico in RESPELL.items():
         texto = re.sub(rf",\s+(?={palabra}\b)", " ", texto)
         texto = re.sub(rf"\b{palabra}\b", fonetico, texto)

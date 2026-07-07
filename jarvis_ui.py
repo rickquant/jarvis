@@ -59,7 +59,8 @@ S = {
     "avisos": [],           # timers vencidos etc. — el browser los recoge y los dice
     "timers": [],           # timers activos {fin, etiqueta} — el HUD los muestra en vivo
     "idioma": "es",         # idioma de la UI — el oído transcribe en este idioma
-    "clima": None,          # refrescado cada 45 min (antes solo en el briefing)
+    "clima": {"es": None, "en": None},  # en AMBOS idiomas (refresco cada 45 min):
+                            # el HUD muestra el del toggle actual, no el del fetch
     "paneles": [],          # tarjetas situacionales del HUD {id,tipo,lineas,ts,ttl}
     "paneles_seq": 0,
     "lock": threading.Lock(),
@@ -118,11 +119,14 @@ _CLIMA_PREGUNTA = re.compile(
 
 def _clima_loop() -> None:
     """El clima del HUD ya no depende del briefing: se refresca cada 45 min
-    desde el arranque (fail-silent: sin red, se queda con el último)."""
+    desde el arranque, EN AMBOS IDIOMAS (el toggle es/en puede cambiar en
+    cualquier momento y "parcialmente nublado" en modo EN desentona).
+    Fail-silent: sin red, se queda con el último."""
     while True:
-        c = _clima(S["idioma"])
-        if c:
-            S["clima"] = c
+        for idi in ("es", "en"):
+            c = _clima(idi)
+            if c:
+                S["clima"][idi] = c
         time.sleep(45 * 60)
 
 
@@ -292,7 +296,7 @@ def estado():
     return jsonify({"fase": S["fase"], "nivel": round(S["nivel"], 4),
                     "manos": S["manos_libres"], "manos_error": err,
                     "pendiente": S["pendiente"] is not None, "aviso": aviso,
-                    "timers": timers, "clima": S["clima"],
+                    "timers": timers, "clima": S["clima"].get(S["idioma"]),
                     "paneles": _paneles_vivos()})
 
 
@@ -428,7 +432,7 @@ def stream():
         # un único round-trip. Mientras se junta, la intro sigue sonando.
         datos, clima = datos_briefing(VAULT, idioma)
         if clima:
-            S["clima"] = clima  # de paso, al HUD (barra de telemetría)
+            S["clima"][idioma] = clima  # de paso, al HUD (barra de telemetría)
             panel("clima", [clima], ttl=90)
         # tarjeta de agenda: los mismos datos del briefing, sin la sección de
         # clima (tiene tarjeta propia) — viven lo que dura el briefing hablado
@@ -437,9 +441,9 @@ def stream():
               ttl=90)
         entrada = PROMPT_BRIEFING.get(idioma, PROMPT_BRIEFING["es"]) \
             .format(datos=datos)
-    elif entrada and _CLIMA_PREGUNTA.search(entrada) and S["clima"]:
+    elif entrada and _CLIMA_PREGUNTA.search(entrada) and S["clima"].get(idioma):
         # preguntó por el clima: la tarjeta se materializa mientras responde
-        panel("clima", [S["clima"]])
+        panel("clima", [S["clima"][idioma]])
     if not entrada:
         return jsonify({"error": "vacío"}), 400
     if S["ocupado"]:
