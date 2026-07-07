@@ -17,6 +17,7 @@ Comandos dentro del chat:
 """
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -35,18 +36,32 @@ INBOX = VAULT / "00-Inbox"
 # Todo lo que no esté acá lo deniega el propio CLI en modo -p: esa es la
 # correa. Los patrones Bash son prefijos exactos — cuanto más específico,
 # más seguro. Crece de a una mano, no de a veinte.
+# Visión opt-out: JARVIS_SIN_VISION=1 arranca la sesión SIN la mano de
+# pantalla. La correa es la de siempre: el CLI ni recibe el permiso — no
+# depende de que el prompt se porte bien.
+SIN_VISION = os.environ.get("JARVIS_SIN_VISION", "").strip() not in ("", "0")
+
 MANOS_TOOLS = [
     "Bash(open -a:*)",           # abrir apps del Mac
     "Bash(python3 timer.py:*)",  # timers (avisa el HUD por voz al vencer)
     "Bash(python3 manos.py:*)",  # menú fijo: cerrar apps, música, volumen, nota, hora
     "Read", "Grep", "Glob",      # buscar y leer en el vault (su memoria real)
     "WebSearch", "WebFetch",     # internet, solo lectura (buscar / leer una URL)
+]
+if not SIN_VISION:
     # visión: screenshot a UN archivo fijo (el prefijo clava el nombre — no
     # puede capturar a rutas arbitrarias); pantalla.png está en .gitignore.
     # OJO: sin punto al frente — screencapture se niega a escribir dotfiles
     # ("cannot write file to intended destination").
-    "Bash(screencapture -x pantalla.png:*)",
-]
+    MANOS_TOOLS.append("Bash(screencapture -x pantalla.png:*)")
+
+_MANO_VISION = """\
+10. VER LA PANTALLA: cuando Charles pregunte qué hay/qué se ve en su
+   pantalla, o pida ayuda con lo que está mirando: ejecutá EXACTAMENTE
+   `screencapture -x pantalla.png` y después leé esa imagen con Read
+   (pantalla.png en el directorio actual). Describí o analizá lo que
+   importa para su pregunta, no cada pixel. La captura es temporal.
+""" if not SIN_VISION else ""
 
 MANOS = f"""\
 
@@ -72,12 +87,7 @@ Tenés manos, pero limitadas. Podés usar EXACTAMENTE esto y nada más:
    precios, "buscame X") y WebFetch para leer una URL concreta. Usalas
    cuando la respuesta necesite información fresca o externa; para audio,
    resumí lo encontrado en 2-3 frases, no leas párrafos enteros.
-10. VER LA PANTALLA: cuando Charles pregunte qué hay/qué se ve en su
-   pantalla, o pida ayuda con lo que está mirando: ejecutá EXACTAMENTE
-   `screencapture -x pantalla.png` y después leé esa imagen con Read
-   (pantalla.png en el directorio actual). Describí o analizá lo que
-   importa para su pregunta, no cada pixel. La captura es temporal.
-
+{_MANO_VISION}
 Si te preguntan qué podés hacer, esta lista es la respuesta (contala en
 una frase, sin numerarla).
 
