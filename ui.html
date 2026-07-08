@@ -415,11 +415,11 @@ const L = {
              Grep: "buscando en el vault…", Glob: "buscando en el vault…",
              WebSearch: "buscando en la web…", WebFetch: "leyendo la web…" },
     panelTipos: { clima: "CLIMA", agenda: "HOY", vault: "VAULT", web: "WEB" },
-    filler: ["En eso estoy…", "Dame un segundo…", "Un momento…", "Ya casi lo tengo…"],
-    manosOn: "Modo manos libres activado. Decí mi nombre y hablá, Charles.",
+    filler: ["En eso estoy, sir…", "Dame un segundo…", "Un momento, sir…", "Ya casi lo tengo…"],
+    manosOn: "Modo manos libres activado. Decí mi nombre y hablá, sir.",
     manosOff: "Manos libres desactivado. Volvemos al click.",
     boot: [["NÚCLEO", "EN LÍNEA"], ["MEMORIA", "VAULT MONTADO"], ["CEREBRO", "SONNET · SUSCRIPCIÓN"],
-           ["OÍDOS", OIDOS_APPLE ? "APPLE · NEURAL ENGINE" : "WHISPER LOCAL"], ["VOZ", "ANDREW · EDGE-TTS"]],
+           ["OÍDOS", OIDOS_APPLE ? "APPLE · NEURAL ENGINE" : "WHISPER LOCAL"], ["VOZ", "ANDREW · EDGE-TTS"]],  // en ES habla Andrew
     iniciar: "iniciar", tele: ["hora", "sesión", "turnos", "latencia", "clima"],
     modo: m => "modo · " + m,
     modoTitle: "alternar entre modo HUD (subtítulos) y modo consola (chat completo)",
@@ -438,8 +438,8 @@ const L = {
     noRespondio: "no respondió", manosLibresErr: "⚠ manos libres: ",
     audioSusp: "🔇 audio suspendido por el browser — un click lo reactiva",
     saludo: h => h < 12 ? "Buenos días" : h < 19 ? "Buenas tardes" : "Buenas noches",
-    corto: s => `${s}, Charles. Sistemas en línea.`,
-    intro: s => [`${s}, Charles.`,
+    corto: s => `${s}, sir. Sistemas en línea.`,
+    intro: s => [`${s}, sir.`,
       "Permitime presentarme: soy Jarvis, una inteligencia artificial " +
       "virtual, y estoy acá para asistirte con una variedad de tareas " +
       "lo mejor que pueda, las 24 horas del día, los 7 días de la semana.",
@@ -457,7 +457,7 @@ const L = {
              Grep: "searching the vault…", Glob: "searching the vault…",
              WebSearch: "searching the web…", WebFetch: "reading the web…" },
     boot: [["CORE", "ONLINE"], ["MEMORY", "VAULT MOUNTED"], ["BRAIN", "SONNET · SUBSCRIPTION"],
-           ["EARS", OIDOS_APPLE ? "APPLE · NEURAL ENGINE" : "LOCAL WHISPER"], ["VOICE", "ANDREW · EDGE-TTS"]],
+           ["EARS", OIDOS_APPLE ? "APPLE · NEURAL ENGINE" : "LOCAL WHISPER"], ["VOICE", "RYAN GB · EDGE-TTS"]],  // en EN habla Ryan (británico)
     iniciar: "start", tele: ["time", "session", "turns", "latency", "weather"],
     modo: m => "mode · " + (m === "consola" ? "console" : m),
     modoTitle: "toggle between HUD mode (subtitles) and console mode (full chat)",
@@ -476,8 +476,8 @@ const L = {
     noRespondio: "didn't respond", manosLibresErr: "⚠ hands-free: ",
     audioSusp: "🔇 audio suspended by the browser — click to resume",
     saludo: h => h < 12 ? "Good morning" : h < 19 ? "Good afternoon" : "Good evening",
-    corto: s => `${s}, Charles. Systems online.`,
-    intro: s => [`${s}, Charles.`,
+    corto: s => `${s}, sir. Systems online.`,
+    intro: s => [`${s}, sir.`,
       "Allow me to introduce myself: I am Jarvis, a virtual artificial " +
       "intelligence, and I am here to assist you with a variety of tasks " +
       "as best I can, 24 hours a day, 7 days a week.",
