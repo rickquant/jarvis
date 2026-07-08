@@ -249,13 +249,23 @@
   }
   body.hud.chatAbierto #ladoChat { transform: none; opacity: 1; pointer-events: auto; }
   #subtitulo {
-    display: none; min-height: 96px; max-width: min(720px, 90vw);
-    margin-top: 10px; text-align: center;
+    display: none; max-width: min(720px, 90vw);
+    text-align: center;
     font-size: 19px; line-height: 1.65; color: var(--text);
     text-shadow: 0 0 18px rgba(111,202,187,.25);
     opacity: 1; transition: opacity 1.4s ease;
   }
-  body.hud #subtitulo { display: block; }
+  /* anclado ARRIBA del dock (fixed, crece hacia arriba): las oraciones
+     largas del briefing hacían 2+ líneas en el flujo y el dock (fixed)
+     las tapaba — el mic sobre las palabras, cazado por Charles en vivo */
+  body.hud #subtitulo {
+    display: block; position: fixed; z-index: 4;
+    left: 50%; transform: translateX(-50%); bottom: 142px;
+  }
+  /* mientras hay subtítulo, fase y pista ceden el lugar (estilo cine:
+     solo el subtítulo habla); vuelven solas al apagarse */
+  #fase, #pista { transition: opacity .6s ease; }
+  body.hud.subOn #fase, body.hud.subOn #pista { opacity: 0; }
   #subtitulo.apagado { opacity: 0; }
   #subtitulo.dim { color: rgba(201,233,239,.45); font-size: 15px; }
 
@@ -631,12 +641,15 @@ function subPoner(texto, dim = false) {
   subEl.textContent = texto;
   subEl.classList.toggle("dim", dim);
   subEl.classList.remove("apagado");
+  document.body.classList.add("subOn");  // fase/pista ceden el lugar
   subUltimo = Date.now();
 }
 // el subtítulo se apaga solo cuando la voz ya terminó y nada está en curso
 setInterval(() => {
-  if (subEl.textContent && !sonando && !ocupado && Date.now() - subUltimo > 3500)
+  if (subEl.textContent && !sonando && !ocupado && Date.now() - subUltimo > 3500) {
     subEl.classList.add("apagado");
+    document.body.classList.remove("subOn");
+  }
 }, 500);
 
 // ── Modo HUD ↔ consola ───────────────────────────────────────────────────
