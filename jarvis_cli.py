@@ -56,7 +56,7 @@ if not SIN_VISION:
     MANOS_TOOLS.append("Bash(screencapture -x pantalla.png:*)")
 
 _MANO_VISION = """\
-10. VER LA PANTALLA: cuando Charles pregunte qué hay/qué se ve en su
+11. VER LA PANTALLA: cuando Charles pregunte qué hay/qué se ve en su
    pantalla, o pida ayuda con lo que está mirando: ejecutá EXACTAMENTE
    `screencapture -x pantalla.png` y después leé esa imagen con Read
    (pantalla.png en el directorio actual). Describí o analizá lo que
@@ -73,6 +73,9 @@ Tenés manos, pero limitadas. Podés usar EXACTAMENTE esto y nada más:
 1. Abrir apps del Mac: Bash con `open -a "Nombre De La App"`.
 2. Cerrar apps: Bash con `python3 manos.py cerrar "Nombre De La App"`.
 3. Música (Spotify): `python3 manos.py musica play|pausa|siguiente|anterior`.
+   Canción o artista ESPECÍFICO: `python3 manos.py cancion "nombre y artista"`
+   — la busca y la pone sola. Si responde que no encontró el track y dejó
+   abierta la búsqueda, avisalo tal cual.
 4. Volumen del sistema: `python3 manos.py volumen <0-100>`.
 5. Captura rápida al vault: `python3 manos.py nota "el texto"` — cuando
    Charles diga "anotá/apuntá/acordate que…", capturalo TEXTUAL al Inbox.
@@ -87,6 +90,12 @@ Tenés manos, pero limitadas. Podés usar EXACTAMENTE esto y nada más:
    precios, "buscame X") y WebFetch para leer una URL concreta. Usalas
    cuando la respuesta necesite información fresca o externa; para audio,
    resumí lo encontrado en 2-3 frases, no leas párrafos enteros.
+10. Browser: `python3 manos.py tab` abre un tab nuevo en Safari (con URL
+   opcional entre comillas: `python3 manos.py tab "https://…"`), y
+   `python3 manos.py url "https://…"` abre un URL en el browser default.
+   Si te piden "buscame X en el browser / en YouTube", componé el URL de
+   búsqueda (google.com/search?q=… / youtube.com/results?search_query=…)
+   y abrilo con `url`.
 {_MANO_VISION}
 Si te preguntan qué podés hacer, esta lista es la respuesta (contala en
 una frase, sin numerarla).

@@ -459,11 +459,13 @@ def stream():
     if idioma == "en":
         entrada += ("\n\n[UI language mode: ENGLISH — reply ONLY in English "
                     "this turn, no matter the language spoken to you. Same "
-                    "persona, same dry wit. Don't mention this note.]")
+                    "persona, same dry wit. Say \"sir\" at most ONCE in this "
+                    "reply, never twice. Don't mention this note.]")
     else:
         entrada += ("\n\n[Modo de idioma de la UI: ESPAÑOL — respondé SOLO "
                     "en español este turno, te hablen en el idioma que te "
-                    "hablen. Misma persona. No menciones esta nota.]")
+                    "hablen. Misma persona. Decí «señor» como máximo UNA vez "
+                    "en esta respuesta, nunca dos. No menciones esta nota.]")
 
     def gen():
         S["ocupado"] = True
