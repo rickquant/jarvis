@@ -142,7 +142,7 @@
     z-index: 5; }
   #sitDock { display: flex; gap: 10px; }  /* chips DEBAJO de la barra (Charles) */
   #sitDock.oculto { display: none; }
-  #dockBar { display: flex; align-items: flex-end; gap: 30px; padding: 7px 30px 8px;
+  #dockBar { display: flex; align-items: center; gap: 30px; padding: 7px 30px 8px;
     border: 1px solid rgba(111,202,187,.24); background: rgba(4,16,14,.6);
     backdrop-filter: blur(3px); }
   .dk { position: relative; background: none; border: none; padding: 4px;
@@ -153,10 +153,13 @@
   .dk svg { width: 21px; height: 21px; fill: none; stroke: currentColor;
     stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round;
     display: block; }
-  .dkMic { margin: -26px 0 2px; width: 54px; height: 54px; border-radius: 50%;
+  /* el mic iba elevado sobre la barra (como el short), pero con 4 íconos
+     (visión oculta) se veía disparejo — Charles: en línea con los demás,
+     conservando el aro que lo distingue como acción principal */
+  .dkMic { margin: 0; width: 40px; height: 40px; border-radius: 50%;
     border: 1px solid rgba(111,202,187,.4); background: rgba(4,16,14,.88);
     display: flex; align-items: center; justify-content: center; }
-  .dkMic svg { width: 27px; height: 27px; }
+  .dkMic svg { width: 22px; height: 22px; }
   .dkMic.activo { color: var(--ambar); border-color: rgba(235,181,79,.55);
     box-shadow: 0 0 18px rgba(235,181,79,.25); }
   #dkBadge { position: absolute; top: -1px; right: -3px; min-width: 13px;
