@@ -38,7 +38,7 @@ from flask import Flask, Response, jsonify, request, send_file
 from briefing import PROMPT_BRIEFING, _clima, datos_briefing
 from jarvis_cli import (VAULT, cargar_contexto, escribir_memoria,
                         preguntar_stream)
-from jarvis_voz import (PERSONA, RESPELL, SAMPLE_RATE, VOZ, VOZ_EN, VOZ_RATE, YAP,
+from jarvis_voz import (PERSONA, RESPELL, SAMPLE_RATE, VOZ, VOZ_RATE, YAP,
                         _limpiar_para_voz, transcribir)
 
 app = Flask(__name__)
@@ -519,13 +519,9 @@ def tts():
     try:
         import edge_tts
 
-        # la voz depende del idioma: no hay británico multilingüe en edge-tts,
-        # así que EN habla Ryan (GB, como el JARVIS real) y ES sigue Andrew
-        voz = VOZ_EN if S["idioma"] == "en" else VOZ
-
         async def _gen() -> bytes:
             buf = bytearray()
-            com = edge_tts.Communicate(texto, voz, rate=VOZ_RATE)
+            com = edge_tts.Communicate(texto, VOZ, rate=VOZ_RATE)
             async for chunk in com.stream():
                 if chunk["type"] == "audio":
                     buf.extend(chunk["data"])
@@ -559,8 +555,8 @@ def timer():
             texto = (f"Your {etiqueta} timer is done, sir." if etiqueta
                      else f"Your {minutos:g} minute timer is done, sir.")
         else:
-            texto = (f"Terminó el timer de {etiqueta}, sir." if etiqueta
-                     else f"Terminó tu timer de {minutos:g} minutos, sir.")
+            texto = (f"Terminó el timer de {etiqueta}, señor." if etiqueta
+                     else f"Terminó tu timer de {minutos:g} minutos, señor.")
         with S["lock"]:
             S["avisos"].append(texto)
             if registro in S["timers"]:
@@ -585,7 +581,7 @@ def salir():
         S["session_id"] = None
         despedida = ("Session memory saved to the vault, sir."
                      if S["idioma"] == "en" else
-                     "Memoria de sesión guardada en el vault, sir.")
+                     "Memoria de sesión guardada en el vault, señor.")
         return jsonify({"nota": str(nota.relative_to(VAULT)),
                         "despedida": despedida})
     except Exception as e:
