@@ -338,7 +338,11 @@
     <button class="dk dkMic" id="dkMic">
       <svg viewBox="0 0 24 24"><rect x="9.2" y="3.4" width="5.6" height="9.6" rx="2.8"/><path d="M6.4 11.4a5.6 5.6 0 0 0 11.2 0M12 17.2v3.2M9.2 20.4h5.6"/><path d="M3.6 8.4a8.4 8.4 0 0 0 0 7.2M20.4 8.4a8.4 8.4 0 0 1 0 7.2"/></svg>
     </button>
-    <button class="dk" id="dkVision">
+    <!-- oculto hasta getDisplayMedia: clickearlo exige tener el HUD al frente,
+         así que screencapture (pantalla entera) se fotografía a sí mismo; la
+         visión por VOZ sí sirve. Con getDisplayMedia este botón renace como
+         disparador del picker (que además requiere gesto del usuario). -->
+    <button class="dk" id="dkVision" style="display:none">
       <svg viewBox="0 0 24 24"><rect x="3" y="4.6" width="18" height="12.4" rx="1.5"/><path d="M9 20.4h6M12 17v3.4"/><path d="M6.4 10.8h2.8l1.4-2.4 2 4.6 1.4-2.2h3.6"/></svg>
     </button>
     <button class="dk" id="dkModo">
