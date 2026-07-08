@@ -24,6 +24,36 @@ from manos import DIAS, MESES
 
 CIUDAD = "Tegucigalpa"
 
+# La tarjeta HOY/TODAY del HUD muestra estos datos CRUDOS (no pasan por el
+# cerebro), así que los rótulos y fechas se componen en el idioma de la UI —
+# con rótulos hardcodeados en español, el panel salía mixto en modo EN.
+# El contenido del vault (Current-State, capturas) sigue en español: eso sí
+# lo traduce el cerebro al narrar, según instruye PROMPT_BRIEFING["en"].
+DIAS_EN = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
+           "Saturday", "Sunday"]
+MESES_EN = ["January", "February", "March", "April", "May", "June", "July",
+            "August", "September", "October", "November", "December"]
+TITULOS = {
+    "es": {"fecha": "fecha y hora", "clima": f"clima en {CIUDAD}",
+           "canvas": "entregas de la U (Canvas)",
+           "capturas": "capturas recientes por voz",
+           "inbox": "notas sin procesar en el Inbox",
+           "proyectos": "proyectos: dónde quedamos"},
+    "en": {"fecha": "date and time", "clima": f"weather in {CIUDAD}",
+           "canvas": "university deadlines (Canvas)",
+           "capturas": "recent voice captures",
+           "inbox": "unprocessed Inbox notes",
+           "proyectos": "projects: where we left off"},
+}
+
+
+def _fecha_larga(a: datetime, idioma: str) -> str:
+    if idioma == "en":
+        return (f"{DIAS_EN[a.weekday()]}, {MESES_EN[a.month - 1]} {a.day}, "
+                f"{a.year}, {a:%H:%M}")
+    return (f"{DIAS[a.weekday()]} {a.day} de {MESES[a.month - 1]} de "
+            f"{a.year}, {a:%H:%M}")
+
 # El prompt entero cambia con el idioma de la UI: la nota per-turn de
 # idioma alcanza para turnos normales (cortos), pero acá el prompt + los
 # datos son un bloque grande en español y la nota quedaba ahogada — en
@@ -108,7 +138,7 @@ def _proximos_pasos(vault: Path) -> str | None:
     return "\n\n".join(piezas) or None
 
 
-def _canvas() -> str | None:
+def _canvas(idioma: str = "es") -> str | None:
     """Entregas próximas de la U vía el repo canvas-automation (la otra
     pieza del portafolio). Se busca el repo en $JARVIS_CANVAS o en rutas
     típicas, se carga su .env a mano y se usa su propia canvas_lib —
@@ -146,7 +176,14 @@ def _canvas() -> str | None:
                                      curso.get("name", "")))
         proximas.sort(key=lambda x: x[0])
         if not proximas:
-            return "sin entregas próximas — semana despejada"
+            return ("no upcoming deadlines — clear week" if idioma == "en"
+                    else "sin entregas próximas — semana despejada")
+        if idioma == "en":
+            return "\n".join(
+                f"- {nombre} ({materia}) — due {DIAS_EN[d.weekday()]}, "
+                f"{MESES_EN[d.month - 1]} {d.day}, {d:%H:%M}"
+                for dt, nombre, materia in proximas[:6]
+                for d in [dt.astimezone()])
         return "\n".join(
             f"- {nombre} ({materia}) — vence {DIAS[d.weekday()]} "
             f"{d.day} de {MESES[d.month - 1]}, {d:%H:%M}"
@@ -166,13 +203,13 @@ def datos_briefing(vault: Path, idioma: str = "es") -> tuple[str, str | None]:
     lo muestra en la barra de telemetría."""
     a = datetime.now()
     clima = _clima(idioma)
-    secciones = [("fecha y hora", f"{DIAS[a.weekday()]} {a.day} de "
-                                  f"{MESES[a.month - 1]} de {a.year}, {a:%H:%M}"),
-                 (f"clima en {CIUDAD}", clima),
-                 ("entregas de la U (Canvas)", _canvas()),
-                 ("capturas recientes por voz", _capturas(vault)),
-                 ("notas sin procesar en el Inbox", _inbox(vault)),
-                 ("proyectos: dónde quedamos", _proximos_pasos(vault))]
+    t = TITULOS.get(idioma, TITULOS["es"])
+    secciones = [(t["fecha"], _fecha_larga(a, idioma)),
+                 (t["clima"], clima),
+                 (t["canvas"], _canvas(idioma)),
+                 (t["capturas"], _capturas(vault)),
+                 (t["inbox"], _inbox(vault)),
+                 (t["proyectos"], _proximos_pasos(vault))]
     return ("\n\n".join(f"· {titulo}:\n{cuerpo}"
                         for titulo, cuerpo in secciones if cuerpo), clima)
 

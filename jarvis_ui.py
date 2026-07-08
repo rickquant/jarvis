@@ -104,6 +104,13 @@ def panel(tipo: str, lineas: list[str], ttl: int = 30) -> None:
                              "lineas": lineas, "ts": time.time(), "ttl": ttl})
 
 
+def _err_ocupado(idioma: str) -> str:
+    # los errores visibles en la UI se componen en el idioma del toggle
+    # (mismo patrón que el aviso de timer y la despedida, sesión 33)
+    return ("busy — wait for the current turn" if idioma == "en"
+            else "ocupado, esperá el turno actual")
+
+
 def _paneles_vivos() -> list[dict]:
     ahora = time.time()
     with S["lock"]:
@@ -381,7 +388,10 @@ def mic_stop():
     dispara el browser contra /api/stream con este texto."""
     stream = _rec["stream"]
     if stream is None:
-        return jsonify({"error": "no estaba grabando"}), 409
+        # los errores visibles en la UI se componen en el idioma del toggle
+        # (mismo patrón que el aviso de timer y la despedida, sesión 33)
+        return jsonify({"error": "wasn't recording" if S["idioma"] == "en"
+                        else "no estaba grabando"}), 409
     _rec["stream"] = None
     S["nivel"] = 0.0
 
@@ -410,7 +420,8 @@ def mic_stop():
     finally:
         S["fase"] = "listo"
     if not texto:
-        return jsonify({"error": "no escuché nada"})
+        return jsonify({"error": "didn't hear anything" if S["idioma"] == "en"
+                        else "no escuché nada"})
     return jsonify({"texto": texto})
 
 
@@ -435,10 +446,14 @@ def stream():
             S["clima"][idioma] = clima  # de paso, al HUD (barra de telemetría)
             panel("clima", [clima], ttl=90)
         # tarjeta de agenda: los mismos datos del briefing, sin la sección de
-        # clima (tiene tarjeta propia) — viven lo que dura el briefing hablado
-        panel("agenda", [l for l in datos.splitlines()
-                         if l.strip() and not l.lower().startswith(("clima", "weather"))],
-              ttl=90)
+        # clima (tiene tarjeta propia) — viven lo que dura el briefing hablado.
+        # El filtro va por BLOQUES de sección ("· título:\ncuerpo"): filtrar
+        # por línea no servía — todas arrancan con "· ", y el valor del clima
+        # ("Partly cloudy…") ni menciona la palabra; salía duplicado.
+        bloques = [b for b in datos.split("\n\n")
+                   if not b.lstrip("· ").lower().startswith(("clima", "weather"))]
+        panel("agenda", [l for b in bloques for l in b.splitlines()
+                         if l.strip()], ttl=90)
         entrada = PROMPT_BRIEFING.get(idioma, PROMPT_BRIEFING["es"]) \
             .format(datos=datos)
     elif entrada and _CLIMA_PREGUNTA.search(entrada) and S["clima"].get(idioma):
@@ -447,7 +462,7 @@ def stream():
     if not entrada:
         return jsonify({"error": "vacío"}), 400
     if S["ocupado"]:
-        return jsonify({"error": "ocupado, esperá el turno actual"}), 409
+        return jsonify({"error": _err_ocupado(idioma)}), 409
 
     # el toggle de idioma de la UI manda sobre el cerebro: en cada modo
     # responde SIEMPRE en ese idioma, le hablen como le hablen (los
@@ -575,7 +590,7 @@ def salir():
     if not S["session_id"]:
         return jsonify({"nota": None})
     if S["ocupado"]:
-        return jsonify({"error": "ocupado, esperá el turno actual"}), 409
+        return jsonify({"error": _err_ocupado(S["idioma"])}), 409
     S["ocupado"] = True
     S["fase"] = "pensando"
     try:
