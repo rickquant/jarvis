@@ -61,29 +61,42 @@ def _fecha_larga(a: datetime, idioma: str) -> str:
 # datos son un bloque grande en español y la nota quedaba ahogada — en
 # modo EN el briefing salía en español igual. Instrucción en inglés,
 # arriba y explícita = el modelo obedece.
+# Regla de oro (2026-07-12, pedido de Charles: "cuando habla mucho se siente
+# no natural"): la TARJETA del HUD muestra denso, la VOZ dice poco — la
+# gramática de las películas. El briefing hablado son 3-5 líneas canon, no
+# un informe; los datos completos igual viajan al cerebro para que elija
+# bien y pueda ampliar si se lo piden.
 PROMPT_BRIEFING = {
     "es": (
         "Es el primer arranque del día y la intro de boot ya sonó — NO saludes "
-        "de nuevo ni te presentes: arrancá directo con el briefing del día, "
-        "como J.A.R.V.I.S. se lo daría a Tony. Breve (6-10 oraciones), al "
-        "grano, con tu ingenio seco. Orden sugerido: clima en una frase → "
-        "entregas o urgencias → pendientes que valgan la pena mencionar → "
-        "próximo paso sugerido del proyecto activo. No listes todo: elegí lo "
-        "que importa HOY y descartá el resto. Nada de markdown ni viñetas: "
-        "esto se dice en voz alta.\n\n=== DATOS DEL DÍA ===\n{datos}"
+        "de nuevo ni te presentes: entrá directo, como J.A.R.V.I.S. "
+        "entregándole el día a Tony al pasar: TRES a CINCO oraciones cortas "
+        "EN TOTAL (10-15 palabras cada una, tu línea canon) y cerraste. "
+        "Prioridad: recordatorios de hoy si los hay (son promesa: se dicen "
+        "SIEMPRE), la entrega más próxima solo si aprieta, y UN próximo paso "
+        "— el del día, no la lista. Fecha y clima caben juntos en una sola "
+        "oración, si los usás. Todo lo demás NO se dice: la tarjeta HOY del "
+        "HUD ya lo muestra escrito — sos la voz, no el informe. Si quedó "
+        "algo que valga la pena, cerrá ofreciendo ampliar en tres palabras. "
+        "Nada de markdown ni viñetas: esto se dice en voz alta."
+        "\n\n=== DATOS DEL DÍA ===\n{datos}"
     ),
     "en": (
         "Deliver this ENTIRE briefing in English — every single sentence. "
         "The data below is in Spanish because the vault is in Spanish: "
         "translate whatever you use, quote nothing verbatim. It's the first "
         "boot of the day and the boot intro already played — do NOT greet "
-        "again or introduce yourself: go straight into the day's briefing, "
-        "the way J.A.R.V.I.S. would give it to Tony. Brief (6-10 sentences), "
-        "to the point, with your dry wit. Suggested order: weather in one "
-        "sentence → deadlines or urgent items → pending notes worth "
-        "mentioning → suggested next step on the active project. Don't list "
-        "everything: pick what matters TODAY and drop the rest. No markdown, "
-        "no bullets: this is spoken out loud.\n\n=== TODAY'S DATA ===\n{datos}"
+        "again or introduce yourself: go straight in, J.A.R.V.I.S. handing "
+        "Tony his day in passing: THREE to FIVE short sentences TOTAL "
+        "(10-15 words each, your canon line) and you're done. Priority: "
+        "today's reminders if any (those are a promise: ALWAYS said), the "
+        "nearest deadline only if it's pressing, and ONE next step — "
+        "today's, not the list. Date and weather fit together in a single "
+        "sentence, if you use them. Everything else stays UNSAID: the TODAY "
+        "card on the HUD already shows it in writing — you're the voice, "
+        "not the report. If something worthwhile was left out, close by "
+        "offering to expand in three words. No markdown, no bullets: this "
+        "is spoken out loud.\n\n=== TODAY'S DATA ===\n{datos}"
     ),
 }
 
