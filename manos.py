@@ -39,11 +39,17 @@ def osa(script: str) -> str:
     return r.stdout.strip()
 
 
+# Sentinela: DDG contestó con su página anti-bot, no con resultados. La
+# canción puede existir perfectamente — que el caller no diga "no existe".
+LIMITADO = "LIMITADO"
+
+
 def _buscar_track(consulta: str) -> str | None:
     """Track ID de Spotify SIN API key: primer resultado de DuckDuckGo lite
     restringido a open.spotify.com/track. Scraping frágil por diseño — si un
     día deja de funcionar, el caller cae al fallback (abrir la búsqueda
-    dentro de Spotify), nunca a un error."""
+    dentro de Spotify), nunca a un error. Devuelve LIMITADO si DDG está
+    ratelimiteando (página de challenge): eso NO significa que no exista."""
     import re
     from urllib.parse import quote_plus
     from urllib.request import Request, urlopen
@@ -57,6 +63,8 @@ def _buscar_track(consulta: str) -> str | None:
                        timeout=8).read().decode("utf-8", "replace")
     except Exception:
         return None
+    if "anomaly" in html and "challenge" in html:  # página anti-bot de DDG
+        return LIMITADO
     # los links de DDG vienen como redirect con el URL real percent-encoded.
     # El PRIMER resultado no siempre es LA canción: los "Live at ...",
     # remixes y covers rankean alto porque repiten el título. Se leen todos
@@ -106,7 +114,14 @@ def main() -> None:
     elif mano in ("cancion", "canción") and args:
         consulta = " ".join(args).replace('"', "").strip()
         tid = _buscar_track(consulta)
-        if tid:
+        if tid == LIMITADO:
+            # el buscador está ratelimiteando — la canción probablemente
+            # existe; decir la verdad, no "no la encontré"
+            subprocess.run(["open", f"spotify:search:{consulta}"], check=False)
+            print(f"el buscador me está limitando ahora mismo (no es que "
+                  f"{consulta!r} no exista); dejé abierta la búsqueda en "
+                  "Spotify — un click y suena, o pedímela de nuevo en un rato")
+        elif tid:
             osa(f'tell application "Spotify" to play track "spotify:track:{tid}"')
             print(f"sonando en Spotify: {consulta}")
         else:

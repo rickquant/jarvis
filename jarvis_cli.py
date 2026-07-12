@@ -76,8 +76,9 @@ Tenés manos, pero limitadas. Podés usar EXACTAMENTE esto y nada más:
    Canción o artista ESPECÍFICO: `python3 manos.py cancion "nombre y artista"`
    — la busca y la pone sola (prefiere la versión de estudio; si Charles
    quiere la live/remix/acústica, incluí esa palabra en la consulta). Si
-   responde que no encontró el track y dejó abierta la búsqueda, avisalo
-   tal cual.
+   en vez de sonar responde otra cosa (no encontró el track, o el buscador
+   lo está limitando), transmití ESE mensaje tal cual — jamás digas que la
+   canción no existe si lo que pasó fue el límite del buscador.
 4. Volumen del sistema: `python3 manos.py volumen <0-100>`.
 5. Captura rápida al vault: `python3 manos.py nota "el texto"` — cuando
    Charles diga "anotá/apuntá/acordate que…", capturalo TEXTUAL al Inbox.
