@@ -9,7 +9,7 @@ Say *"jarvis"*, talk to it, and it answers out loud — in the movie persona —
 
 - **Hands-free**: *"jarvis"* wake word (openWakeWord, local) + adaptive VAD — speak, and it auto-stops when you go quiet. Zero clicks.
 - **Conversation with memory**: it knows its user, their projects and past decisions, and **remembers across sessions**. It even maintains its own project-state notes: tell it *"I already recorded the video"* and it crosses the item off, so tomorrow's briefing won't nag you about it (see the memory design below).
-- **Proactive briefing**: on the first boot of the day it doesn't just say hello — it reports the weather, pending vault notes, voice captures and upcoming university deadlines (via a Canvas LMS integration), all spoken, while a TODAY card materializes on the HUD.
+- **Proactive briefing**: on the first boot of the day it doesn't just say hello — it reports the weather, pending vault notes, voice captures, upcoming university deadlines (via a Canvas LMS integration) and **due reminders** (*"remind me tomorrow…"* → a dated note; the right morning's briefing brings it up), all spoken, while a TODAY card materializes on the HUD.
 - **Hands**: opens and closes apps, **plays a specific song on Spotify** (resolved without any API key — and it prefers the studio version over live cuts unless you ask for the live one), opens Safari tabs and URLs, controls system volume, sets spoken timers, captures voice notes, searches its own memory, and **searches the web** — all behind an allowlist security model.
 - **Vision**: *"what's on my screen?"* → screenshot → Claude describes it out loud. Can be disabled entirely with one env flag.
 - **The persona**: rebuilt from a corpus study of the actual film dialogue — answer-first, one to two proportional sentences, at most one *"sir"* per reply, deadpan wit embedded rather than appended.
@@ -118,7 +118,6 @@ Useful deep links: `?idioma=en|es` (force UI language), `?briefing` (force the m
 
 ## Roadmap
 
-- **Persistent reminders**: "remind me tomorrow…" → dated note in the vault, picked up by the next day's briefing.
 - **Command router**: intercept obvious commands before the LLM round-trip.
 - **Window-level vision**: an in-browser picker to share one window or tab instead of the whole screen.
 - **Multi-agent** (SDK phase): background research without blocking the conversation.

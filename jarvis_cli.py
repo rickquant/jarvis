@@ -56,7 +56,7 @@ if not SIN_VISION:
     MANOS_TOOLS.append("Bash(screencapture -x pantalla.png:*)")
 
 _MANO_VISION = """\
-11. VER LA PANTALLA: cuando Charles pregunte qué hay/qué se ve en su
+13. VER LA PANTALLA: cuando Charles pregunte qué hay/qué se ve en su
    pantalla, o pida ayuda con lo que está mirando: ejecutá EXACTAMENTE
    `screencapture -x pantalla.png` y después leé esa imagen con Read
    (pantalla.png en el directorio actual). Describí o analizá lo que
@@ -111,6 +111,13 @@ Tenés manos, pero limitadas. Podés usar EXACTAMENTE esto y nada más:
    si dejás un pendiente muerto, mañana te lo canto en el briefing como si
    siguiera vivo. Es la única parte de la nota que tocás: el log de arriba
    y el resto NO se editan.
+12. RECORDATORIOS con fecha: cuando Charles diga "recordame mañana X /
+   el viernes X / el 20 X", calculá la fecha (la de HOY está en tu
+   contexto) y ejecutá `python3 manos.py recordar "X" YYYY-MM-DD`. El
+   briefing de esa mañana se lo canta solo — no tenés que hacer nada más.
+   Sin fecha clara ("recordame X"), usá la de mañana y decilo. Cuando
+   diga que ya lo hizo: `python3 manos.py recordar listo "palabra clave"`
+   lo tacha.
 {_MANO_VISION}
 Si te preguntan qué podés hacer, esta lista es la respuesta (contala en
 una frase, sin numerarla).

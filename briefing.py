@@ -36,11 +36,13 @@ MESES_EN = ["January", "February", "March", "April", "May", "June", "July",
 TITULOS = {
     "es": {"fecha": "fecha y hora", "clima": f"clima en {CIUDAD}",
            "canvas": "entregas de la U (Canvas)",
+           "recordatorios": "recordatorios para hoy",
            "capturas": "capturas recientes por voz",
            "inbox": "notas sin procesar en el Inbox",
            "proyectos": "proyectos: dónde quedamos"},
     "en": {"fecha": "date and time", "clima": f"weather in {CIUDAD}",
            "canvas": "university deadlines (Canvas)",
+           "recordatorios": "reminders for today",
            "capturas": "recent voice captures",
            "inbox": "unprocessed Inbox notes",
            "proyectos": "projects: where we left off"},
@@ -121,8 +123,23 @@ def _inbox(vault: Path) -> str | None:
         return None
     notas = [f.stem for f in sorted(carpeta.glob("*.md"))
              if not f.name.startswith(("Capturas-Jarvis", "Jarvis-Sesion",
-                                       "README"))]
+                                       "Recordatorios-Jarvis", "README"))]
     return ", ".join(notas[:12]) or None
+
+
+def _recordatorios(vault: Path) -> str | None:
+    """Recordatorios con fecha de hoy o vencida (los escribe manos.py
+    recordar). El formato de línea es "- [ ] YYYY-MM-DD — texto": la fecha
+    en posición fija permite comparar como texto. Los tachados ([x]) y los
+    futuros no se cantan."""
+    f = vault / "00-Inbox" / "Recordatorios-Jarvis.md"
+    if not f.is_file():
+        return None
+    hoy = f"{datetime.now():%Y-%m-%d}"
+    lineas = [ln[6:].strip() for ln in
+              f.read_text(encoding="utf-8").splitlines()
+              if ln.startswith("- [ ] ") and ln[6:16] <= hoy]
+    return "\n".join(f"- {ln}" for ln in lineas[:8]) or None
 
 
 def limpiar_markdown(texto: str) -> str:
@@ -232,6 +249,7 @@ def secciones_briefing(vault: Path,
         (t["fecha"], _fecha_larga(a, idioma), True),
         (t["clima"], _clima(idioma), True),
         (t["canvas"], _canvas(idioma), True),
+        (t["recordatorios"], _recordatorios(vault), vault_ui),
         (t["capturas"], _capturas(vault), vault_ui),
         (t["inbox"], _inbox(vault), vault_ui),
         (t["proyectos"], _proximos_pasos(vault), vault_ui),

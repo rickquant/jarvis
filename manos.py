@@ -12,6 +12,8 @@ Manos de Jarvis: acciones del Mac detrás de UN prefijo allowlisteado.
     python3 manos.py url "https://…"             # abre un URL en el browser default
     python3 manos.py estado ver [Proyecto]       # bloque "próximo paso" del Current-State
     python3 manos.py estado bloque "…" [Proyecto]  # reescribe ese bloque (memoria viva)
+    python3 manos.py recordar "texto" [YYYY-MM-DD]  # recordatorio con fecha (default: mañana)
+    python3 manos.py recordar listo "clave"      # tacha los que matcheen
 
 El menú fijo ES la seguridad: la allowlist del cerebro permite el prefijo
 `python3 manos.py` y este script solo sabe hacer esto — nada de osascript
@@ -205,6 +207,41 @@ end tell''')
                   f"{m.group(2).strip()}")
         else:
             sys.exit('estado: ver [Proyecto] | bloque "texto nuevo" [Proyecto]')
+
+    elif mano == "recordar" and args:
+        # Recordatorios persistentes: "recordame mañana X" → línea con
+        # fecha en el vault; el briefing de esa mañana los canta. Formato:
+        # "- [ ] YYYY-MM-DD — texto" (checkbox de Obsidian: Charles también
+        # puede tacharlos a mano desde el vault).
+        from datetime import timedelta
+        nota = VAULT / "00-Inbox" / "Recordatorios-Jarvis.md"
+        if args[0].lower() == "listo" and len(args) > 1:
+            clave = " ".join(args[1:]).replace('"', "").strip().lower()
+            if not nota.is_file():
+                sys.exit("no hay recordatorios anotados")
+            lineas = nota.read_text(encoding="utf-8").splitlines()
+            hechos = [i for i, ln in enumerate(lineas)
+                      if ln.startswith("- [ ]") and clave in ln.lower()]
+            if not hechos:
+                sys.exit(f"ningún recordatorio pendiente matchea {clave!r}")
+            for i in hechos:
+                lineas[i] = lineas[i].replace("- [ ]", "- [x]", 1)
+            nota.write_text("\n".join(lineas) + "\n", encoding="utf-8")
+            print("tachado:\n" + "\n".join(lineas[i] for i in hechos))
+        else:
+            texto = args[0].replace('"', "").strip()
+            fecha = args[1].strip() if len(args) > 1 else \
+                f"{datetime.now() + timedelta(days=1):%Y-%m-%d}"
+            try:
+                datetime.strptime(fecha, "%Y-%m-%d")
+            except ValueError:
+                sys.exit(f"fecha inválida (YYYY-MM-DD): {fecha!r}")
+            encabezado = ("" if nota.exists() else
+                          "---\ntags: [inbox, jarvis, recordatorios]\n---\n\n"
+                          "# Recordatorios de Jarvis\n\n")
+            with nota.open("a", encoding="utf-8") as f:
+                f.write(f"{encabezado}- [ ] {fecha} — {texto}\n")
+            print(f"recordatorio para el {fecha}: {texto}")
 
     elif mano == "hora":
         a = datetime.now()
