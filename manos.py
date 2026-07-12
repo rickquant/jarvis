@@ -57,10 +57,31 @@ def _buscar_track(consulta: str) -> str | None:
                        timeout=8).read().decode("utf-8", "replace")
     except Exception:
         return None
-    # los links de DDG vienen como redirect con el URL real percent-encoded
-    m = re.search(r"open\.spotify\.com(?:%2F|/)track(?:%2F|/)([A-Za-z0-9]{22})",
-                  html)
-    return m.group(1) if m else None
+    # los links de DDG vienen como redirect con el URL real percent-encoded.
+    # El PRIMER resultado no siempre es LA canción: los "Live at ...",
+    # remixes y covers rankean alto porque repiten el título. Se leen todos
+    # los candidatos con su texto visible y gana la versión de estudio —
+    # salvo que la consulta misma pida live/remix/etc.
+    candidatos = re.findall(
+        r'<a[^>]+href="[^"]*open\.spotify\.com(?:%2F|/)track(?:%2F|/)'
+        r'([A-Za-z0-9]{22})[^"]*"[^>]*>(.*?)</a>', html, re.S)
+    if not candidatos:  # red de seguridad: el regex viejo, por si DDG cambia
+        m = re.search(r"open\.spotify\.com(?:%2F|/)track(?:%2F|/)([A-Za-z0-9]{22})",
+                      html)
+        return m.group(1) if m else None
+    RUIDO = [r"\blive\b", r"\ben vivo\b", r"\ben directo\b", r"\bunplugged\b",
+             r"\bac[uú]stic\w*", r"\bremix\b", r"\bcover\b", r"\bkaraoke\b",
+             r"\btribute\b", r"\bsped.up\b", r"\bslowed\b", r"\binstrumental\b",
+             r"\bdemo\b", r"\bedit\b"]
+    pedido = consulta.lower()
+
+    def puntaje(cand: tuple[str, str]) -> int:
+        titulo = re.sub(r"<[^>]+>", " ", cand[1]).lower()
+        return sum(1 for p in RUIDO
+                   if re.search(p, titulo) and not re.search(p, pedido))
+
+    # min es estable: a igual puntaje gana el que DDG rankeó primero
+    return min(candidatos, key=puntaje)[0]
 
 
 def main() -> None:
