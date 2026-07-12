@@ -35,7 +35,8 @@ import numpy as np
 import sounddevice as sd
 from flask import Flask, Response, jsonify, request, send_file
 
-from briefing import PROMPT_BRIEFING, _clima, datos_briefing
+from briefing import (PROMPT_BRIEFING, TITULOS, _clima, datos_briefing,
+                      secciones_briefing)
 from jarvis_cli import (VAULT, cargar_contexto, escribir_memoria,
                         preguntar_stream)
 from jarvis_voz import (PERSONA, RESPELL, SAMPLE_RATE, VOZ, VOZ_RATE, YAP,
@@ -441,19 +442,23 @@ def stream():
         # briefing proactivo del primer boot del día: la recolección de
         # datos es determinística (briefing.py) y el cerebro solo narra —
         # un único round-trip. Mientras se junta, la intro sigue sonando.
-        datos, clima = datos_briefing(VAULT, idioma)
+        secciones = secciones_briefing(VAULT, idioma)
+        datos = "\n\n".join(f"· {t}:\n{c}" for t, c, _ in secciones if c)
+        titulo_clima = TITULOS.get(idioma, TITULOS["es"])["clima"]
+        clima = next((c for t, c, _ in secciones if t == titulo_clima), None)
         if clima:
             S["clima"][idioma] = clima  # de paso, al HUD (barra de telemetría)
             panel("clima", [clima], ttl=90)
-        # tarjeta de agenda: los mismos datos del briefing, sin la sección de
-        # clima (tiene tarjeta propia) — viven lo que dura el briefing hablado.
-        # El filtro va por BLOQUES de sección ("· título:\ncuerpo"): filtrar
-        # por línea no servía — todas arrancan con "· ", y el valor del clima
-        # ("Partly cloudy…") ni menciona la palabra; salía duplicado.
-        bloques = [b for b in datos.split("\n\n")
-                   if not b.lstrip("· ").lower().startswith(("clima", "weather"))]
-        panel("agenda", [l for b in bloques for l in b.splitlines()
-                         if l.strip()], ttl=90)
+        # tarjeta de agenda: las secciones del briefing SIN el clima (tiene
+        # tarjeta propia) y SIN la prosa que no esté en el idioma de la UI —
+        # el vault es español, así que en modo EN capturas/proyectos salían
+        # en español dentro de la tarjeta (el bug que reportó Charles). El
+        # cerebro igual las narra traducidas; a la tarjeta solo va lo que ya
+        # está en el idioma correcto (fecha, entregas de Canvas).
+        lineas_tarjeta = [ln for t, c, en_idioma_ui in secciones
+                          if c and en_idioma_ui and t != titulo_clima
+                          for ln in (f"· {t}:", *c.splitlines()) if ln.strip()]
+        panel("agenda", lineas_tarjeta, ttl=90)
         entrada = PROMPT_BRIEFING.get(idioma, PROMPT_BRIEFING["es"]) \
             .format(datos=datos)
     elif entrada and _CLIMA_PREGUNTA.search(entrada) and S["clima"].get(idioma):

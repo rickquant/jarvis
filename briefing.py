@@ -197,21 +197,41 @@ def _canvas(idioma: str = "es") -> str | None:
         sys.path.remove(str(repo))
 
 
+def secciones_briefing(vault: Path,
+                       idioma: str = "es") -> list[tuple[str, str, bool]]:
+    """Las secciones del día como (titulo, cuerpo, en_idioma_ui).
+
+    `en_idioma_ui` marca si el CONTENIDO está en el idioma de la UI:
+    - fecha/clima/canvas se generan acá en el idioma de la UI → True.
+    - capturas/inbox/proyectos son prosa CRUDA del vault (español) → solo
+      es True cuando la UI está en español. El cerebro las narra traducidas
+      igual; el flag es para la tarjeta del HUD, que las muestra crudas y en
+      modo EN salían en español (el bug que reportó Charles).
+    """
+    a = datetime.now()
+    t = TITULOS.get(idioma, TITULOS["es"])
+    vault_ui = idioma == "es"  # el vault está en español
+    return [
+        (t["fecha"], _fecha_larga(a, idioma), True),
+        (t["clima"], _clima(idioma), True),
+        (t["canvas"], _canvas(idioma), True),
+        (t["capturas"], _capturas(vault), vault_ui),
+        (t["inbox"], _inbox(vault), vault_ui),
+        (t["proyectos"], _proximos_pasos(vault), vault_ui),
+    ]
+
+
 def datos_briefing(vault: Path, idioma: str = "es") -> tuple[str, str | None]:
     """Junta todo el contexto del día en un bloque para el cerebro.
     Devuelve (datos, clima) — el clima va aparte porque el HUD también
-    lo muestra en la barra de telemetría."""
-    a = datetime.now()
-    clima = _clima(idioma)
-    t = TITULOS.get(idioma, TITULOS["es"])
-    secciones = [(t["fecha"], _fecha_larga(a, idioma)),
-                 (t["clima"], clima),
-                 (t["canvas"], _canvas(idioma)),
-                 (t["capturas"], _capturas(vault)),
-                 (t["inbox"], _inbox(vault)),
-                 (t["proyectos"], _proximos_pasos(vault))]
+    lo muestra en la barra de telemetría. El cerebro recibe TODO (traduce
+    lo que use); el filtro por idioma es solo para la tarjeta (ver
+    secciones_briefing / jarvis_ui)."""
+    secciones = secciones_briefing(vault, idioma)
+    clima = next((c for tit, c, _ in secciones
+                  if tit == TITULOS.get(idioma, TITULOS["es"])["clima"]), None)
     return ("\n\n".join(f"· {titulo}:\n{cuerpo}"
-                        for titulo, cuerpo in secciones if cuerpo), clima)
+                        for titulo, cuerpo, _ in secciones if cuerpo), clima)
 
 
 if __name__ == "__main__":

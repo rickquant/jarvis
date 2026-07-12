@@ -10,6 +10,8 @@ Manos de Jarvis: acciones del Mac detrás de UN prefijo allowlisteado.
     python3 manos.py hora                        # fecha y hora actual
     python3 manos.py tab ["https://…"]           # tab nuevo en Safari (URL opcional)
     python3 manos.py url "https://…"             # abre un URL en el browser default
+    python3 manos.py estado ver [Proyecto]       # bloque "próximo paso" del Current-State
+    python3 manos.py estado bloque "…" [Proyecto]  # reescribe ese bloque (memoria viva)
 
 El menú fijo ES la seguridad: la allowlist del cerebro permite el prefijo
 `python3 manos.py` y este script solo sabe hacer esto — nada de osascript
@@ -133,6 +135,40 @@ end tell''')
         with nota.open("a", encoding="utf-8") as f:
             f.write(f"{encabezado}- **{ahora:%H:%M}** — {texto}\n")
         print(f"anotado en 00-Inbox/{nota.name}")
+
+    elif mano == "estado" and args:
+        # Memoria de proyecto: leer/reescribir el bloque "Dónde quedamos /
+        # próximo paso" del Current-State — lo que el briefing de la mañana
+        # le lee a Charles. SOLO ese bloque: el log de sesiones (arriba) y el
+        # resto de la nota no se tocan, por diseño. La versión anterior se
+        # imprime al escribir: queda en el transcript por si hay que volver.
+        import re
+        orden = args[0].lower()
+        proyecto = (args[2] if orden == "bloque" and len(args) > 2 else
+                    args[1] if orden == "ver" and len(args) > 1 else "Jarvis")
+        cs = VAULT / "01-Projects" / proyecto / "Current-State.md"
+        if not cs.is_file():
+            sys.exit(f"no existe {cs.relative_to(VAULT)}")
+        cuerpo = cs.read_text(encoding="utf-8")
+        m = re.search(r"(^## Dónde quedamos.*?\n)(.*?)(?=^## |\Z)",
+                      cuerpo, re.M | re.S)
+        if m is None:
+            sys.exit("no encontré el bloque '## Dónde quedamos' en la nota")
+        if orden == "ver":
+            print(m.group(2).strip())
+        elif orden == "bloque" and len(args) > 1 and args[1].strip():
+            nuevo = args[1].strip()
+            cuerpo = (cuerpo[:m.start(2)] + "\n" + nuevo + "\n\n"
+                      + cuerpo[m.end(2):])
+            cuerpo = re.sub(r"^ultima_actualizacion:.*$",
+                            f"ultima_actualizacion: {datetime.now():%Y-%m-%d}",
+                            cuerpo, count=1, flags=re.M)
+            cs.write_text(cuerpo, encoding="utf-8")
+            print(f"bloque actualizado en {cs.relative_to(VAULT)}\n\n"
+                  f"— versión anterior (por si hay que volver):\n"
+                  f"{m.group(2).strip()}")
+        else:
+            sys.exit('estado: ver [Proyecto] | bloque "texto nuevo" [Proyecto]')
 
     elif mano == "hora":
         a = datetime.now()
