@@ -21,6 +21,8 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
+from collections import deque
 from datetime import datetime
 from pathlib import Path
 
@@ -247,6 +249,26 @@ def preguntar_stream(prompt: str, system: str, session_id: str | None):
         cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
         cwd=VAULT / "01-Projects/Jarvis/code",
     )
+    # stderr drenado en un thread SIEMPRE: con stderr=PIPE sin lector, un CLI
+    # verboso llena el buffer del pipe (64KB), el hijo se bloquea escribiendo
+    # y nosotros leyendo stdout — deadlock clásico, y el turno (con el
+    # "ocupado" del HUD, que además deja sordo el oído) queda colgado eterno.
+    err_cola: deque = deque(maxlen=200)  # la cola alcanza para el mensaje
+    hilo_err = threading.Thread(target=lambda: err_cola.extend(proc.stderr),
+                                daemon=True)
+    hilo_err.start()
+    # techo duro del turno: si `claude -p` se cuelga (red caída, ratelimit),
+    # el kill hace que stdout devuelva EOF y el error sale por el camino
+    # normal — el TIMEOUT de siempre solo cubría el wait() final, no este
+    # read loop, así que un turno colgado no tenía fin.
+    colgado = threading.Event()
+
+    def _matar():
+        colgado.set()
+        proc.kill()
+
+    verdugo = threading.Timer(TIMEOUT, _matar)
+    verdugo.start()
     partes: list[str] = []
     final: str | None = None
     sid = session_id
@@ -299,10 +321,16 @@ def preguntar_stream(prompt: str, system: str, session_id: str | None):
                 if ev.get("is_error"):
                     raise RuntimeError(ev.get("result", "error desconocido del CLI"))
                 final = ev.get("result")
-        proc.wait(timeout=TIMEOUT)
+        proc.wait()  # stdout ya cerró: el proceso está terminando
         if proc.returncode != 0:
-            raise RuntimeError(proc.stderr.read().strip() or "claude -p falló sin mensaje")
+            hilo_err.join(timeout=1)  # que el drenaje termine de juntar la cola
+            err = "".join(err_cola).strip()
+            if colgado.is_set():
+                err = (f"el turno superó los {TIMEOUT}s y se canceló"
+                       + (f" — {err}" if err else ""))
+            raise RuntimeError(err or "claude -p falló sin mensaje")
     finally:
+        verdugo.cancel()
         if proc.poll() is None:
             proc.kill()
 

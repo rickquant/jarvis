@@ -66,7 +66,6 @@ S = {
     "paneles_seq": 0,
     "lock": threading.Lock(),
 }
-_rec = {"stream": None, "frames": []}
 
 # Corte de oraciones para TTS incremental: apenas hay una oración completa
 # en el stream se manda a sintetizar, sin esperar el resto de la respuesta.
@@ -159,14 +158,33 @@ def _panel_vault(nombre: str, input_: dict) -> None:
         panel("vault", [f"» {input_['pattern']}"])
 
 
-# ── Manos libres: "hey jarvis" (openWakeWord) + fin de habla (VAD) ────────
+# ── Oído único: UN stream de mic para todo el server ─────────────────────
 #
-# Loop en thread propio:  mic continuo → wake word → capturar hasta silencio
-# → Whisper → S["pendiente"]  (el browser lo reclama vía /api/pendiente y
-# dispara el turno normal por /api/stream — nada más cambia).
+# Historia (2026-07-12): antes cada click del mic abría y cerraba su propio
+# InputStream, y cada toggle de manos libres levantaba otro más (thread +
+# modelo ONNX recargado). En macOS eso es ruleta rusa: PortAudio serializa
+# contra CoreAudio con un lock interno y un stop()/open() eventualmente se
+# cuelga; los watchdogs de entonces "abandonaban" la llamada colgada — el
+# thread quedaba vivo dentro de CoreAudio con el lock tomado y TODA apertura
+# posterior del proceso se colgaba para siempre: el mic moría tras unos
+# requests y manos libres no volvía hasta reiniciar el server (reproducido
+# en vivo: mic/start tardaba exactamente el watchdog y devolvía "no
+# respondió", con el server recién usado esa misma mañana).
 #
-# Anti-eco: se pausa mientras el browser reproduce la voz de Jarvis, mientras
-# hay un turno en curso, o si ningún browser está mirando (poll viejo).
+# Diseño nuevo: un solo thread (_audio_daemon) es DUEÑO del único stream.
+#   - Se abre a demanda (primer uso) y NO se cierra nunca: cerrar es justo
+#     donde CoreAudio se cuelga, y el costo de tenerlo abierto es ~0 (el
+#     audio se descarta salvo captura en curso). PortAudio limpia al salir.
+#   - Push-to-talk ya no abre nada: mic/start|stop solo marcan "grabando"
+#     y el daemon acumula los frames (tope 60s — deque circular).
+#   - Manos libres corre sobre el mismo feed; el modelo de wake word se
+#     carga UNA vez, no en cada toggle.
+#   - Si el stream muere (CoreAudio abort, device desconectado), el daemon
+#     lo reabre solo con backoff — serializado, sin threads abandonados.
+#
+# Anti-eco (igual que siempre): la detección se pausa mientras el browser
+# reproduce la voz de Jarvis, mientras hay un turno en curso, o si ningún
+# browser está mirando (poll viejo).
 
 CHUNK = 1280           # 80 ms @ 16 kHz — lo que espera openwakeword
 UMBRAL_WAKE = 0.35     # score para despertar — bajado de 0.5 (2026-07-05) para
@@ -178,26 +196,49 @@ MAX_UTTERANCE = 15.0   # tope de captura por turno
 ESPERA_HABLA = 6.0     # despertó pero nunca habló → volver a dormir
 
 
+_audio = {
+    "vivo": False,      # stream abierto y leyendo
+    "error": None,      # último error de audio — mic/start lo muestra
+    "grabando": False,  # push-to-talk: el daemon acumula frames
+    # tope 60s: si el mic queda "grabando" minutos (click perdido, tab
+    # duplicado), la memoria no crece y se transcribe solo la cola
+    "frames": deque(maxlen=int(60 * SAMPLE_RATE / CHUNK)),
+}
+
+
 def _oido_activo() -> bool:
     # el 1.5 tolera el heartbeat de "sigo hablando" (400ms, o ~1s si el tab
-    # está en background y el browser lo estrangula)
+    # está en background y el browser lo estrangula).
+    # 65s de poll: manos libres se usa justo cuando el HUD NO es el tab
+    # visible, y Chrome estrangula los timers de un tab en background hasta
+    # 1/min — con 5s el oído se dormía en pleno uso. Sin ningún browser,
+    # igual se apaga al minuto de cerrar el último tab.
     return (not S["ocupado"]
-            and _rec["stream"] is None                      # sin push-to-talk en curso
+            and not _audio["grabando"]                      # sin push-to-talk en curso
             and time.time() - S["hablando_browser"] > 1.5   # jarvis no está sonando
-            and time.time() - S["ultimo_poll"] < 5)         # hay un browser mirando
+            and time.time() - S["ultimo_poll"] < 65)        # hay un browser vivo
 
 
-def _manos_libres_loop() -> None:
+def _cargar_oww():
+    """El modelo de wake word, UNA vez por proceso (antes se recargaba en
+    cada toggle). Si falla, manos libres se apaga y el toggle reintenta."""
     try:
         from openwakeword.model import Model as OWW
         from openwakeword.utils import download_models
         download_models(["hey_jarvis"])  # no-op si ya están
-        oww = OWW(wakeword_models=["hey_jarvis"], inference_framework="onnx")
+        return OWW(wakeword_models=["hey_jarvis"], inference_framework="onnx")
     except Exception as e:
         S["manos_error"] = f"openwakeword no cargó: {e}"
         S["manos_libres"] = False
-        return
+        return None
 
+
+def _audio_daemon() -> None:
+    """Dueño único del mic. Corre desde el boot; duerme hasta el primer uso."""
+    stream = None
+    oww = None
+    espera = 2.0                # backoff de reapertura
+    aviso_open = False          # el error de apertura se canta una vez por racha
     piso = deque(maxlen=60)     # RMS del ruido de fondo del cuarto (rolling)
     preroll = deque(maxlen=15)  # ~1.2s de audio previo al wake: sin esto, las
                                 # palabras dichas mientras el detector confirma
@@ -207,69 +248,123 @@ def _manos_libres_loop() -> None:
         base = sorted(piso)[len(piso) // 2] if piso else 0.0
         return max(base * 3.0, 0.006)
 
-    try:
-        with sd.InputStream(samplerate=SAMPLE_RATE, channels=1,
-                            dtype="float32", blocksize=CHUNK) as st:
-            while S["manos_libres"]:
-                datos, _ = st.read(CHUNK)
+    while True:
+        if stream is None:
+            if not (S["manos_libres"] or _audio["grabando"]):
+                time.sleep(0.1)  # nadie necesita el mic todavía
+                continue
+            try:
+                st = sd.InputStream(samplerate=SAMPLE_RATE, channels=1,
+                                    dtype="float32", blocksize=CHUNK)
+                st.start()
+                stream = st
+                _audio.update(vivo=True, error=None)
+                espera, aviso_open = 2.0, False
+            except Exception as e:
+                _audio.update(vivo=False, error=str(e))
+                if S["manos_libres"] and not aviso_open:
+                    S["manos_error"] = f"no pude abrir el mic: {e}"
+                    aviso_open = True
+                time.sleep(espera)
+                espera = min(espera * 2, 30)
+                continue
+
+        # el modelo se carga la primera vez que manos libres lo necesita
+        if S["manos_libres"] and oww is None:
+            oww = _cargar_oww()  # si falla: apaga manos_libres y avisa
+
+        try:
+            datos, _ = stream.read(CHUNK)
+            x = datos[:, 0]
+
+            if _audio["grabando"]:            # push-to-talk manda
+                with S["lock"]:
+                    _audio["frames"].append(x.copy())
+                S["nivel"] = float(np.sqrt((x ** 2).mean()))
+                continue
+
+            if not (S["manos_libres"] and oww is not None and _oido_activo()):
+                if S["nivel"]:
+                    S["nivel"] = 0.0          # que no quede nivel fantasma
+                continue  # seguir leyendo (buffer fresco) pero sin detectar
+
+            # ── detección "hey jarvis" ──
+            preroll.append(x.copy())
+            piso.append(float(np.sqrt((x ** 2).mean())))
+            score = max(oww.predict((x * 32767).astype(np.int16)).values())
+            if score > 0.2:
+                # visible en la terminal: con esto se tunea UMBRAL_WAKE
+                # (si tus "hey jarvis" marcan 0.3-0.4, bajá el umbral)
+                print(f"  oído · score {score:.2f} (umbral {UMBRAL_WAKE})",
+                      flush=True)
+            if score < UMBRAL_WAKE:
+                continue
+
+            # ── despertó: capturar hasta que dejes de hablar ──
+            # arranca con el pre-roll: incluye el "jarvis" y lo que hayas
+            # dicho de corrido mientras el detector confirmaba
+            oww.reset()
+            S["fase"] = "escuchando"
+            frames = list(preroll)
+            preroll.clear()
+            hablo, silencio, t0 = False, 0.0, time.time()
+            while S["manos_libres"] and not _audio["grabando"]:
+                datos, _ = stream.read(CHUNK)
                 x = datos[:, 0]
-                if not _oido_activo():
-                    continue  # seguir leyendo (buffer fresco) pero sin detectar
-                preroll.append(x.copy())
-                piso.append(float(np.sqrt((x ** 2).mean())))
-                score = max(oww.predict((x * 32767).astype(np.int16)).values())
-                if score > 0.2:
-                    # visible en la terminal: con esto se tunea UMBRAL_WAKE
-                    # (si tus "hey jarvis" marcan 0.3-0.4, bajá el umbral)
-                    print(f"  oído · score {score:.2f} (umbral {UMBRAL_WAKE})",
-                          flush=True)
-                if score < UMBRAL_WAKE:
-                    continue
-
-                # ── despertó: capturar hasta que dejes de hablar ──
-                # arranca con el pre-roll: incluye el "jarvis" y lo que hayas
-                # dicho de corrido mientras el detector confirmaba
-                oww.reset()
-                S["fase"] = "escuchando"
-                frames = list(preroll)
-                preroll.clear()
-                hablo, silencio, t0 = False, 0.0, time.time()
-                while S["manos_libres"]:
-                    datos, _ = st.read(CHUNK)
-                    x = datos[:, 0]
-                    frames.append(x.copy())
-                    rms = float(np.sqrt((x ** 2).mean()))
-                    S["nivel"] = rms
-                    if rms > umbral_voz():
-                        hablo, silencio = True, 0.0
-                    elif hablo:
-                        silencio += CHUNK / SAMPLE_RATE
-                        if silencio >= SILENCIO_FIN:
-                            break
-                    if time.time() - t0 > (MAX_UTTERANCE if hablo else ESPERA_HABLA):
+                frames.append(x.copy())
+                rms = float(np.sqrt((x ** 2).mean()))
+                S["nivel"] = rms
+                if rms > umbral_voz():
+                    hablo, silencio = True, 0.0
+                elif hablo:
+                    silencio += CHUNK / SAMPLE_RATE
+                    if silencio >= SILENCIO_FIN:
                         break
-                S["nivel"] = 0.0
+                if time.time() - t0 > (MAX_UTTERANCE if hablo else ESPERA_HABLA):
+                    break
+            S["nivel"] = 0.0
 
-                if not hablo:
-                    S["fase"] = "listo"
-                    continue
-                S["fase"] = "transcribiendo"
+            if _audio["grabando"]:  # click a media captura: el click gana
+                S["fase"] = "escuchando"
+                continue
+            if not hablo:
+                S["fase"] = "listo"
+                continue
+            S["fase"] = "transcribiendo"
+            try:
                 texto = transcribir(np.concatenate(frames).flatten(),
                                     S["idioma"])
-                # el pre-roll mete el wake word (y a veces ruido previo) al
-                # inicio — quitar hasta el "jarvis" inclusive, si está al frente
-                texto = re.sub(r"^.{0,40}?\bjarvis\b[\s,.:;!?]*", "", texto,
-                               count=1, flags=re.I | re.S).strip() or texto
-                if texto:
-                    S["pendiente"] = texto
-                    S["fase"] = "pensando"  # el browser reclama y dispara el turno
-                else:
-                    S["fase"] = "listo"
-    except Exception as e:
-        S["manos_error"] = f"el oído murió: {e}"
-        S["manos_libres"] = False
-        if S["fase"] in ("escuchando", "transcribiendo"):
-            S["fase"] = "listo"
+            except Exception as e:
+                # STT caído no es razón para tirar el stream: avisar y seguir
+                S["manos_error"] = f"no pude transcribir: {e}"
+                S["fase"] = "listo"
+                continue
+            # el pre-roll mete el wake word (y a veces ruido previo) al
+            # inicio — quitar hasta el "jarvis" inclusive, si está al frente
+            texto = re.sub(r"^.{0,40}?\bjarvis\b[\s,.:;!?]*", "", texto,
+                           count=1, flags=re.I | re.S).strip() or texto
+            if texto:
+                S["pendiente"] = texto
+                S["fase"] = "pensando"  # el browser reclama y dispara el turno
+            else:
+                S["fase"] = "listo"
+
+        except Exception as e:
+            # el stream murió (CoreAudio abort, device desconectado): soltarlo
+            # y reabrir con backoff — el server nunca más queda sordo hasta
+            # reiniciar. abort() primero: teardown liviano, sin drenar buffers
+            _audio.update(vivo=False, error=f"el mic murió: {e}")
+            for cerrar in (stream.abort, stream.close):
+                try:
+                    cerrar()
+                except Exception:
+                    pass
+            stream = None
+            S["nivel"] = 0.0
+            if S["fase"] in ("escuchando", "transcribiendo"):
+                S["fase"] = "listo"
+            if S["manos_libres"]:
+                S["manos_error"] = f"el oído murió: {e} — reabriendo el mic"
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────
@@ -310,13 +405,12 @@ def estado():
 
 @app.post("/api/manos_libres")
 def manos_libres():
-    encender = bool((request.json or {}).get("on"))
-    if encender and not S["manos_libres"]:
-        S["manos_libres"] = True
+    # solo mueve el flag: el daemon del oído (dueño del stream) reacciona.
+    # Antes cada toggle levantaba thread + stream + modelo ONNX nuevos —
+    # el churn que terminaba trabando CoreAudio.
+    S["manos_libres"] = bool((request.json or {}).get("on"))
+    if S["manos_libres"]:
         S["manos_error"] = None
-        threading.Thread(target=_manos_libres_loop, daemon=True).start()
-    elif not encender:
-        S["manos_libres"] = False  # el loop se apaga solo al ver el flag
     return jsonify({"on": S["manos_libres"]})
 
 
@@ -342,81 +436,57 @@ def pendiente():
 
 @app.post("/api/mic/start")
 def mic_start():
-    """Idempotente: si ya estaba grabando (tab viejo, click perdido), reinicia
-    la captura en vez de fallar — el click del usuario siempre gana. Si no,
-    el browser y el servidor quedan desincronizados y los clicks mueren."""
-    if _rec["stream"] is not None:
-        _rec["frames"] = []
+    """Ya no abre ningún stream: marca "grabando" y el daemon del oído
+    acumula los frames del stream único (así se acabó el open/close por
+    click que trababa CoreAudio). Idempotente: si ya estaba grabando (tab
+    viejo, click perdido), reinicia la captura en vez de fallar — el click
+    del usuario siempre gana."""
+    if _audio["grabando"]:
+        with S["lock"]:
+            _audio["frames"].clear()
         S["fase"] = "escuchando"
         return jsonify({"ok": True, "reiniciado": True})
-    _rec["frames"] = []
-
-    def callback(indata, _frames, _time, _status):
-        _rec["frames"].append(indata.copy())
-        S["nivel"] = float(np.sqrt((indata ** 2).mean()))
-
-    # Abrir el mic también puede colgarse (PortAudio/CoreAudio, p.ej. si el
-    # proceso no tiene permiso de mic): watchdog de 5s y error visible antes
-    # que una UI muda.
-    res = {}
-
-    def _abrir():
-        try:
-            st = sd.InputStream(samplerate=SAMPLE_RATE, channels=1,
-                                dtype="float32", callback=callback)
-            st.start()
-            res["stream"] = st
-        except Exception as e:
-            res["error"] = str(e)
-
-    th = threading.Thread(target=_abrir, daemon=True)
-    th.start()
-    th.join(timeout=5)
-    if "stream" not in res:
-        return jsonify({"error": res.get(
-            "error",
-            "el mic no respondió — corré Jarvis desde tu terminal "
-            "(permiso de micrófono de macOS)")}), 500
-
-    _rec["stream"] = res["stream"]
-    S["fase"] = "escuchando"
-    return jsonify({"ok": True})
+    with S["lock"]:
+        _audio["frames"].clear()
+    _audio["error"] = None     # intento fresco: que no mande un error viejo
+    _audio["grabando"] = True  # esto despierta el open del daemon si hace falta
+    t0 = time.time()
+    while time.time() - t0 < 5:  # el open sano tarda <1s; margen de 5s
+        if _audio["vivo"]:
+            S["fase"] = "escuchando"
+            return jsonify({"ok": True})
+        if _audio["error"]:
+            break
+        time.sleep(0.05)
+    _audio["grabando"] = False
+    return jsonify({"error": _audio["error"] or (
+        "el mic no respondió — corré Jarvis desde tu terminal "
+        "(permiso de micrófono de macOS)")}), 500
 
 
 @app.post("/api/mic/stop")
 def mic_stop():
     """Corta la grabación y devuelve SOLO la transcripción; el turno lo
-    dispara el browser contra /api/stream con este texto."""
-    stream = _rec["stream"]
-    if stream is None:
+    dispara el browser contra /api/stream con este texto. Sin stop()/close()
+    de ningún stream: solo se baja el flag y se recogen los frames."""
+    if not _audio["grabando"]:
         # los errores visibles en la UI se componen en el idioma del toggle
         # (mismo patrón que el aviso de timer y la despedida, sesión 33)
         return jsonify({"error": "wasn't recording" if S["idioma"] == "en"
                         else "no estaba grabando"}), 409
-    _rec["stream"] = None
-    S["nivel"] = 0.0
-
-    # stop() de PortAudio se puede colgar (visto en macOS). Si eso pasa y el
-    # endpoint no responde, el browser queda "ocupado" para siempre y los
-    # clicks mueren. Watchdog: 3s y seguimos con los frames que ya tenemos.
-    def _cerrar():
-        try:
-            stream.stop()
-            stream.close()
-        except Exception:
-            pass
-    th = threading.Thread(target=_cerrar, daemon=True)
-    th.start()
-    th.join(timeout=3)
+    _audio["grabando"] = False
+    # ojo: nivel NO se toca acá — el único escritor es el daemon (si lo
+    # pisáramos, su chunk en vuelo lo revive); él lo baja a 0 en ≤80ms
+    with S["lock"]:  # el daemon pudo estar a media append
+        frames = list(_audio["frames"])
+        _audio["frames"].clear()
 
     S["fase"] = "transcribiendo"
     try:
-        audio = (np.concatenate(_rec["frames"]).flatten()
-                 if _rec["frames"] else np.zeros(0, dtype=np.float32))
-        _rec["frames"] = []
-        # tope de 60s: si el mic quedó abierto minutos (click perdido, tab
-        # duplicado), transcribirlo entero colgaría el turno
-        audio = audio[-60 * SAMPLE_RATE:]
+        # el deque ya limita a 60s: si el mic quedó "grabando" minutos
+        # (click perdido, tab duplicado), se transcribe solo la cola
+        audio = (np.concatenate(frames).flatten()
+                 if frames else np.zeros(0, dtype=np.float32))
         texto = transcribir(audio, S["idioma"])
     finally:
         S["fase"] = "listo"
@@ -630,6 +700,8 @@ def main() -> None:
         target=lambda: transcribir(np.zeros(SAMPLE_RATE, dtype=np.float32)),
         daemon=True,
     ).start()
+    # oído único: el daemon dueño del mic arranca ya (duerme hasta el 1er uso)
+    threading.Thread(target=_audio_daemon, daemon=True).start()
     # clima siempre fresco en el HUD (antes solo lo traía el briefing del día)
     threading.Thread(target=_clima_loop, daemon=True).start()
 
