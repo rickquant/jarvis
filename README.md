@@ -3,6 +3,11 @@
 A J.A.R.V.I.S.-style personal voice assistant running **locally on macOS at $0 cost**.
 Say *"jarvis"*, talk to it, and it answers out loud — in the movie persona — with real memory of who you are and what you're working on, while a film-grade HUD shows what's happening.
 
+<p align="center">
+  <img src="docs/hud.png" alt="The Jarvis HUD booting: the J.A.R.V.I.S. signature materializes in particles over the reactor, with the morning briefing card and the action dock" width="900">
+</p>
+<p align="center"><sub>The boot sequence, live: the signature materializes in particles while the morning briefing card slides in.</sub></p>
+
 > 🎬 *Demo video: coming soon.*
 
 ## What it does
