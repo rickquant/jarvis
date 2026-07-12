@@ -585,6 +585,17 @@ def stream():
                         pendiente = pendiente[m.end():]
                         primera = False
                 elif ev[0] == "mano":
+                    # la frase de anuncio ("Dale, la pongo.") quedaba PRESA
+                    # en `pendiente` hasta después de la herramienta: el
+                    # corte de oraciones espera texto posterior que no llega
+                    # — lo siguiente es el tool_use — y el "on it" sonaba
+                    # con la acción ya hecha, pegado al "listo" (reporte de
+                    # Charles 2026-07-12). Al arrancar una mano se suelta lo
+                    # acumulado: se dice MIENTRAS la herramienta corre.
+                    if pendiente.strip():
+                        yield _sse({"tipo": "oracion", "texto": pendiente})
+                        pendiente = ""
+                        primera = False
                     yield _sse({"tipo": "mano", "texto": ev[1]})
                 elif ev[0] == "mano_uso":
                     _panel_vault(ev[1], ev[2])   # qué nota lee / qué busca
