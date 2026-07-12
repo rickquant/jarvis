@@ -125,6 +125,20 @@ def _inbox(vault: Path) -> str | None:
     return ", ".join(notas[:12]) or None
 
 
+def limpiar_markdown(texto: str) -> str:
+    """Prosa del vault → texto plano para la tarjeta del HUD: el markdown
+    crudo (callouts de Obsidian, negritas, wikilinks) se ve feo en el look
+    de película. Solo presentación — el cerebro recibe el original."""
+    t = re.sub(r"^>\s?\[!\w+\][ \t]*", "", texto, flags=re.M)  # > [!todo]
+    t = re.sub(r"^>\s?", "", t, flags=re.M)                # > blockquote
+    t = re.sub(r"\[\[(?:[^\]|]+\|)?([^\]]+)\]\]", r"\1", t)  # [[nota|alias]]
+    t = re.sub(r"\*\*([^*]+)\*\*", r"\1", t)               # **negrita**
+    t = re.sub(r"(?<!\*)\*([^*\n]+)\*(?!\*)", r"\1", t)    # *cursiva*
+    t = re.sub(r"`([^`]+)`", r"\1", t)                     # `código`
+    t = re.sub(r"^#{1,6}\s+", "", t, flags=re.M)           # ## encabezados
+    return t
+
+
 def _proximos_pasos(vault: Path) -> str | None:
     """El bloque "Dónde quedamos / próximo paso" del Current-State de cada
     proyecto activo — el protocolo de memoria del vault lo mantiene al día."""
@@ -134,7 +148,10 @@ def _proximos_pasos(vault: Path) -> str | None:
         m = re.search(r"^## Dónde quedamos.*?\n(.*?)(?=^## |\Z)",
                       cuerpo, re.M | re.S)
         if m and m.group(1).strip():
-            piezas.append(f"[{cs.parent.name}]\n{m.group(1).strip()[:700]}")
+            bloque = m.group(1).strip()
+            if len(bloque) > 700:  # cortar en palabra completa, no a la mitad
+                bloque = bloque[:700].rsplit(None, 1)[0] + " …"
+            piezas.append(f"[{cs.parent.name}]\n{bloque}")
     return "\n\n".join(piezas) or None
 
 

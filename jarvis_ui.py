@@ -36,7 +36,7 @@ import sounddevice as sd
 from flask import Flask, Response, jsonify, request, send_file
 
 from briefing import (PROMPT_BRIEFING, TITULOS, _clima, datos_briefing,
-                      secciones_briefing)
+                      limpiar_markdown, secciones_briefing)
 from jarvis_cli import (VAULT, cargar_contexto, escribir_memoria,
                         preguntar_stream)
 from jarvis_voz import (PERSONA, RESPELL, SAMPLE_RATE, VOZ, VOZ_RATE, YAP,
@@ -455,9 +455,14 @@ def stream():
         # en español dentro de la tarjeta (el bug que reportó Charles). El
         # cerebro igual las narra traducidas; a la tarjeta solo va lo que ya
         # está en el idioma correcto (fecha, entregas de Canvas).
+        # limpiar_markdown: la prosa del vault trae callouts/negritas/
+        # wikilinks que en la tarjeta se veían crudos (feo para el look de
+        # película); solo presentación — `datos` (el cerebro) va original
         lineas_tarjeta = [ln for t, c, en_idioma_ui in secciones
                           if c and en_idioma_ui and t != titulo_clima
-                          for ln in (f"· {t}:", *c.splitlines()) if ln.strip()]
+                          for ln in (f"· {t}:",
+                                     *limpiar_markdown(c).splitlines())
+                          if ln.strip()]
         panel("agenda", lineas_tarjeta, ttl=90)
         entrada = PROMPT_BRIEFING.get(idioma, PROMPT_BRIEFING["es"]) \
             .format(datos=datos)
