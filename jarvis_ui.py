@@ -172,9 +172,15 @@ def _panel_vault(nombre: str, input_: dict) -> None:
 # respondió", con el server recién usado esa misma mañana).
 #
 # Diseño nuevo: un solo thread (_audio_daemon) es DUEÑO del único stream.
-#   - Se abre a demanda (primer uso) y NO se cierra nunca: cerrar es justo
-#     donde CoreAudio se cuelga, y el costo de tenerlo abierto es ~0 (el
-#     audio se descarta salvo captura en curso). PortAudio limpia al salir.
+#   - Se abre a demanda (primer uso) y NO se cierra nunca (close() es justo
+#     donde CoreAudio se cuelga; PortAudio limpia al salir). Pero sí se
+#     PAUSA: si nadie necesita el mic por PAUSA_OCIOSO segundos, abort()
+#     suelta el hardware — el indicador naranja de macOS se apaga (reporte
+#     de Charles 2026-07-13: el puntito quedaba fijo tras el primer uso) —
+#     y el MISMO stream se reanuda con start() al próximo uso. abort/start
+#     sobre un stream vivo es el patrón normal de cualquier app de voz;
+#     el veneno era el close()+open() de streams nuevos, y encima
+#     concurrente — esto queda serializado en el único daemon.
 #   - Push-to-talk ya no abre nada: mic/start|stop solo marcan "grabando"
 #     y el daemon acumula los frames (tope 60s — deque circular).
 #   - Manos libres corre sobre el mismo feed; el modelo de wake word se
@@ -194,6 +200,10 @@ SILENCIO_FIN = 1.3     # segundos callado = terminaste de hablar — 1.0 cortaba
                        # a Charles a media frase en pausas naturales
 MAX_UTTERANCE = 15.0   # tope de captura por turno
 ESPERA_HABLA = 6.0     # despertó pero nunca habló → volver a dormir
+PAUSA_OCIOSO = 20.0    # sin manos libres ni push-to-talk por tanto tiempo →
+                       # abort() del stream (indicador naranja fuera). Gracia
+                       # holgada: entre clicks de una conversación normal el
+                       # mic ni se pausa — cero churn de start/abort
 
 
 _audio = {
@@ -236,6 +246,8 @@ def _cargar_oww():
 def _audio_daemon() -> None:
     """Dueño único del mic. Corre desde el boot; duerme hasta el primer uso."""
     stream = None
+    pausado = False             # stream abierto pero abort()eado (mic suelto)
+    ocioso_desde = None         # cuándo dejó de necesitarse el mic
     oww = None
     espera = 2.0                # backoff de reapertura
     aviso_open = False          # el error de apertura se canta una vez por racha
@@ -248,9 +260,31 @@ def _audio_daemon() -> None:
         base = sorted(piso)[len(piso) // 2] if piso else 0.0
         return max(base * 3.0, 0.006)
 
+    def soltar(e) -> None:
+        # el stream murió (CoreAudio abort, device desconectado, start/abort
+        # que falló): soltarlo y dejar que el loop lo reabra con backoff —
+        # el server nunca más queda sordo hasta reiniciar. abort() primero:
+        # teardown liviano, sin drenar buffers
+        nonlocal stream, pausado
+        _audio.update(vivo=False, error=f"el mic murió: {e}")
+        for cerrar in (stream.abort, stream.close):
+            try:
+                cerrar()
+            except Exception:
+                pass
+        stream = None
+        pausado = False
+        S["nivel"] = 0.0
+        if S["fase"] in ("escuchando", "transcribiendo"):
+            S["fase"] = "listo"
+        if S["manos_libres"]:
+            S["manos_error"] = f"el oído murió: {e} — reabriendo el mic"
+
     while True:
+        necesitado = S["manos_libres"] or _audio["grabando"]
+
         if stream is None:
-            if not (S["manos_libres"] or _audio["grabando"]):
+            if not necesitado:
                 time.sleep(0.1)  # nadie necesita el mic todavía
                 continue
             try:
@@ -258,6 +292,7 @@ def _audio_daemon() -> None:
                                     dtype="float32", blocksize=CHUNK)
                 st.start()
                 stream = st
+                pausado, ocioso_desde = False, None
                 _audio.update(vivo=True, error=None)
                 espera, aviso_open = 2.0, False
             except Exception as e:
@@ -268,6 +303,35 @@ def _audio_daemon() -> None:
                 time.sleep(espera)
                 espera = min(espera * 2, 30)
                 continue
+
+        if pausado:
+            if not necesitado:
+                time.sleep(0.1)  # mic suelto, indicador apagado
+                continue
+            try:
+                stream.start()   # reanudar el MISMO stream: <100ms
+                pausado, ocioso_desde = False, None
+                _audio.update(vivo=True, error=None)
+            except Exception as e:
+                soltar(e)        # si reanudar falla, reabrir de cero
+                continue
+
+        if not necesitado:
+            # nadie usa el mic: tras la gracia, soltar el hardware para que
+            # el indicador naranja de macOS se apague. abort(), NO close()
+            if ocioso_desde is None:
+                ocioso_desde = time.time()
+            elif time.time() - ocioso_desde >= PAUSA_OCIOSO:
+                try:
+                    stream.abort()
+                    pausado = True
+                    _audio["vivo"] = False
+                    S["nivel"] = 0.0
+                except Exception as e:
+                    soltar(e)
+                continue
+        else:
+            ocioso_desde = None
 
         # el modelo se carga la primera vez que manos libres lo necesita
         if S["manos_libres"] and oww is None:
@@ -350,21 +414,7 @@ def _audio_daemon() -> None:
                 S["fase"] = "listo"
 
         except Exception as e:
-            # el stream murió (CoreAudio abort, device desconectado): soltarlo
-            # y reabrir con backoff — el server nunca más queda sordo hasta
-            # reiniciar. abort() primero: teardown liviano, sin drenar buffers
-            _audio.update(vivo=False, error=f"el mic murió: {e}")
-            for cerrar in (stream.abort, stream.close):
-                try:
-                    cerrar()
-                except Exception:
-                    pass
-            stream = None
-            S["nivel"] = 0.0
-            if S["fase"] in ("escuchando", "transcribiendo"):
-                S["fase"] = "listo"
-            if S["manos_libres"]:
-                S["manos_error"] = f"el oído murió: {e} — reabriendo el mic"
+            soltar(e)
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────

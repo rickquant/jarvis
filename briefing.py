@@ -22,7 +22,10 @@ from pathlib import Path
 
 from manos import DIAS, MESES
 
-CIUDAD = "Tegucigalpa"
+# Miami, no Tegucigalpa: es la ciudad que el briefing dice en cámara y los
+# clientes del video la ubican al instante (pedido de Charles, 2026-07-13).
+# El reloj/fecha siguen siendo los del sistema (hora local real).
+CIUDAD = "Miami"
 
 # La tarjeta HOY/TODAY del HUD muestra estos datos CRUDOS (no pasan por el
 # cerebro), así que los rótulos y fechas se componen en el idioma de la UI —
